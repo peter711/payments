@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: payment-api
+  config:
+    # Shared Micrometer/Prometheus conventions from the payments-observability module.
+    import: classpath:payments-observability.yml
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        spring.json.add.type.headers: false
+
+logging:
+  level:
+    root: INFO
+    com.softfal.payment_api: DEBUG

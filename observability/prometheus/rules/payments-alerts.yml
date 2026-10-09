@@ -1,0 +1,91 @@
+# Alerting rules for the payments system.
+#
+# SLIs follow RED (Rate/Errors/Duration) for the services plus the two async
+# signals that matter most for this pipeline: the outbox backlog and the Kafka
+# consumer lag. Tags stay low-cardinality (no payment/account ids).
+groups:
+  - name: payments-availability
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Target {{ $labels.job }} is down"
+          description: "Prometheus cannot scrape {{ $labels.job }} ({{ $labels.instance }})."
+
+      - alert: HighHttpErrorRate
+        expr: |
+          sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            /
+          clamp_min(sum by (application) (rate(http_server_requests_seconds_count[5m])), 0.001) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 5xx rate on {{ $labels.application }}"
+          description: "More than 5% of requests have failed with a 5xx for 5 minutes."
+
+      - alert: HighHttpLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, application) (rate(http_server_requests_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency on {{ $labels.application }}"
+          description: "p95 request latency has been above 1s for 10 minutes."
+
+  - name: payments-pipeline
+    rules:
+      - alert: OutboxBacklogGrowing
+        expr: max by (application) (payments_processor_outbox_pending) > 100
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Outbox backlog on {{ $labels.application }}"
+          description: "More than 100 outbox events have been waiting to be published for 10 minutes."
+
+      - alert: OutboxPublishFailures
+        expr: increase(payments_processor_outbox_publish_failures_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox publish failures on {{ $labels.application }}"
+          description: "The outbox relay failed to publish an event in the last 10 minutes."
+
+      - alert: DeadLetterMessages
+        expr: increase(payments_processor_dlq_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Messages routed to the DLT"
+          description: "At least one record was dead-lettered in the last 10 minutes."
+
+      - alert: KafkaConsumerLagHigh
+        expr: max by (application) (kafka_consumer_fetch_manager_records_lag_max) > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer lag on {{ $labels.application }}"
+          description: "Consumer lag has exceeded 1000 records for 10 minutes."
+
+  - name: payments-runtime
+    rules:
+      - alert: HighJvmHeapUsage
+        expr: |
+          sum by (application) (jvm_memory_used_bytes{area="heap"})
+            /
+          clamp_min(sum by (application) (jvm_memory_max_bytes{area="heap"}), 1) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High JVM heap usage on {{ $labels.application }}"
+          description: "Heap usage has been above 85% for 10 minutes."

@@ -1,0 +1,15 @@
+# Build artifacts
+target/
+
+# Local runtime state (H2 file databases)
+data/
+
+# Local environment (credentials); commit .env.example instead
+.env
+
+# IntelliJ IDEA (shared run configs under .run/ are kept)
+.idea/
+*.iml
+
+# OS
+.DS_Store

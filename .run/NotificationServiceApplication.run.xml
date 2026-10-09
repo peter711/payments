@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="NotificationServiceApplication" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="com.softfal.notification_service.NotificationServiceApplication" />
+    <module name="notification-service" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/notification-service" />
+    <option name="VM_PARAMETERS" value="-Dserver.port=9082" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

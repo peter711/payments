@@ -1,0 +1,24 @@
+# Headless service that gives the single KRaft broker the stable DNS name
+# "kafka", which is exactly what the services and the advertised listener use.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  labels:
+    app: kafka
+spec:
+  clusterIP: None
+  # The broker advertises itself as "kafka:kafka:19092" / "kafka:9093" (controller
+  # quorum voter), so it must be able to resolve its own name before it is Ready.
+  # Without this the headless service publishes no DNS record until the pod is
+  # ready, which the broker can never reach because it cannot resolve itself.
+  publishNotReadyAddresses: true
+  selector:
+    app: kafka
+  ports:
+    - name: internal
+      port: 19092
+      targetPort: 19092
+    - name: controller
+      port: 9093
+      targetPort: 9093

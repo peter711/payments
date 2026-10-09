@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="PaymentApiApplication" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="com.softfal.payment_api.PaymentApiApplication" />
+    <module name="payment-api" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/payment-api" />
+    <option name="VM_PARAMETERS" value="-Dserver.port=9080" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

@@ -1,0 +1,15 @@
+## Config for running payment-api inside Kubernetes (profile: k8s).
+##
+## The Kafka bootstrap servers are supplied by the deployment via
+## SPRING_KAFKA_BOOTSTRAP_SERVERS. The actuator endpoints back the Kubernetes
+## probes and the Prometheus scrape (prometheus.io/scrape annotation).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always

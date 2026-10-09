@@ -1,0 +1,32 @@
+meta {
+  name: Create Payment
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/payments
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "paymentId": "pay-123",
+    "accountId": "acc-456",
+    "amount": 199.99,
+    "currency": "PLN",
+    "createdAt": "2026-10-09T18:00:00Z"
+  }
+}
+
+tests {
+  test("should return 202 Accepted", function() {
+    expect(res.status).to.equal(202);
+    expect(res.body.paymentId).to.equal("pay-123");
+  });
+}

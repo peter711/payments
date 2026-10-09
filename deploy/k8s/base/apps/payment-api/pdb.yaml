@@ -1,0 +1,11 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: payment-api
+  labels:
+    app: payment-api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: payment-api

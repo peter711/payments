@@ -1,0 +1,22 @@
+# minReplicas == maxReplicas == 2 pins the service at exactly two instances;
+# see payment-api/hpa.yaml for the rationale.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: payment-processor
+  labels:
+    app: payment-processor
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: payment-processor
+  minReplicas: 2
+  maxReplicas: 2
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80

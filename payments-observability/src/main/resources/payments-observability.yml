@@ -1,0 +1,34 @@
+# Shared observability defaults for every payments service.
+#
+# Imported explicitly by each service with:
+#   spring.config.import: classpath:payments-observability.yml
+# Properties in the importing application.yml still take precedence, so a
+# service (or the k8s profile) can override anything defined here.
+management:
+  endpoints:
+    web:
+      exposure:
+        # health/info back the Kubernetes probes; prometheus is scraped by
+        # Prometheus. Keep this list explicit rather than exposing "*".
+        include: health,info,prometheus
+  observations:
+    key-values:
+      # Low-cardinality environment tag shared by metrics and traces.
+      env: ${PAYMENTS_ENV:local}
+  metrics:
+    distribution:
+      # Histograms (not just quantiles) for the HTTP server and gateway
+      # observations, so Prometheus can compute p95/p99 across instances with
+      # histogram_quantile.
+      percentiles-histogram:
+        http.server.requests: true
+        payments.processor.gateway.duration: true
+
+spring:
+  kafka:
+    template:
+      # Emit spring.kafka.template observations (metrics + trace context).
+      observation-enabled: true
+    listener:
+      # Emit spring.kafka.listener observations, including consumer lag.
+      observation-enabled: true

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softfal.com/contracts/envelope.v1.json",
+  "title": "EventEnvelope",
+  "description": "Transport wrapper around every payment event. The payload is validated separately against the payload schema referenced by EventType.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "eventType",
+    "eventVersion",
+    "occurredAt",
+    "correlationId",
+    "causationId",
+    "payload"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique event id; the deduplication key."
+    },
+    "eventType": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Logical event name, e.g. payment.completed."
+    },
+    "eventVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "correlationId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Ties together all events of one business flow."
+    },
+    "causationId": {
+      "type": ["string", "null"],
+      "description": "Id of the causing event; null for the root of a flow."
+    },
+    "payload": {
+      "type": "object",
+      "description": "Serialized domain event, described by the matching payload schema."
+    }
+  }
+}

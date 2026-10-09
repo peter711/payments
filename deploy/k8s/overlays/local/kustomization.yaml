@@ -1,0 +1,31 @@
+# Local k3d overlay. The base already pins "replicas: 2" and the :local image
+# tags used by `k3d image import`; this overlay is the single place to tweak
+# those for a local run without touching the base manifests.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: payments
+
+resources:
+  - ../../base
+  # Development-only credentials for the local cluster.
+  - postgres-secret.yaml
+
+patches:
+  - path: grafana-admin-patch.yaml
+
+images:
+  - name: payments/payment-api
+    newTag: local
+  - name: payments/payment-processor
+    newTag: local
+  - name: payments/notification-service
+    newTag: local
+
+replicas:
+  - name: payment-api
+    count: 2
+  - name: payment-processor
+    count: 2
+  - name: notification-service
+    count: 2

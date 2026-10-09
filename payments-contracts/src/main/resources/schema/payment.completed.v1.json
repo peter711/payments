@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softfal.com/contracts/payment.completed.v1.json",
+  "title": "PaymentCompleted",
+  "description": "Event published to payments.completed when the gateway accepts a payment.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["paymentId", "accountId", "amount", "currency", "completedAt"],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "accountId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "amount": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "minLength": 1
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

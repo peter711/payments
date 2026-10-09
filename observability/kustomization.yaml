@@ -1,0 +1,31 @@
+# This directory is the single source of truth for the monitoring stack:
+# docker-compose mounts these files directly, and Kubernetes consumes them as
+# generated ConfigMaps (see deploy/k8s/base/kustomization.yaml, which pulls this
+# directory in as a resource).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+generatorOptions:
+  labels:
+    app.kubernetes.io/part-of: payments
+
+configMapGenerator:
+  # key is "prometheus.k8s.yml"; the Deployment remaps it to prometheus.yml.
+  - name: prometheus-config
+    files:
+      - prometheus/prometheus.k8s.yml
+  - name: prometheus-rules
+    files:
+      - prometheus/rules/payments-alerts.yml
+  - name: grafana-datasources
+    files:
+      - grafana/provisioning/datasources/prometheus.yml
+  - name: grafana-dashboards-provider
+    files:
+      - grafana/provisioning/dashboards/dashboards.yml
+  - name: grafana-dashboards
+    files:
+      - grafana/dashboards/payments-overview.json
+      - grafana/dashboards/service-red.json
+      - grafana/dashboards/kafka.json
+      - grafana/dashboards/jvm.json

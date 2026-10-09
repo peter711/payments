@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softfal.com/contracts/payment.failed.v1.json",
+  "title": "PaymentFailed",
+  "description": "Event published to payments.failed when the gateway rejects a payment.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["paymentId", "accountId", "amount", "currency", "reason", "failedAt"],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "accountId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "amount": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reason": {
+      "type": ["string", "null"],
+      "description": "Failure reason; null when the gateway gave no detail."
+    },
+    "failedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+## Config for running notification-service inside Kubernetes (profile: k8s).
+##
+## Unlike the default profile, which uses a single-machine H2 file database, the
+## clustered deployment points every replica at a shared PostgreSQL instance so
+## the notification deduplication state is shared across instances.
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/payments
+    username: ${DB_USERNAME:payments}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-postgres.sql
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always

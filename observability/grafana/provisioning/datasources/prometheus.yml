@@ -1,0 +1,12 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    # "prometheus" is the service/container name in both compose stacks and in
+    # Kubernetes, so the same provisioning works everywhere.
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

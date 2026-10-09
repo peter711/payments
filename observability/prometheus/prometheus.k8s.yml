@@ -1,0 +1,49 @@
+# Prometheus config for the Kubernetes deployment.
+#
+# Pods are discovered through the Kubernetes API (kubernetes_sd_configs) and
+# only those annotated with prometheus.io/scrape="true" are scraped. This is the
+# annotation-based convention used because the local cluster has no Prometheus
+# Operator / ServiceMonitor CRDs.
+#
+# Scraping is done per Pod (not per Service) so that every replica is collected
+# even though the Services load-balance across them.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: payments-pods
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      # Only the payments namespace.
+      - source_labels: [__meta_kubernetes_namespace]
+        action: keep
+        regex: payments
+      # Only pods that opt in via the scrape annotation.
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: "true"
+      # Honour a custom metrics path when the annotation is present.
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      # Rewrite the address to the annotated container port.
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      # Useful, bounded target labels. The "application" label is intentionally
+      # NOT set here: it already comes from the Micrometer common tags, and a
+      # scrape-level label would clash with the metric's own label.
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: app
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod

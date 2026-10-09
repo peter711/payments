@@ -1,0 +1,37 @@
+# One-off topic bootstrap, the k8s equivalent of the kafka-init compose service.
+# It retries until the broker accepts the connection, so it is safe to apply at
+# the same time as (or before) Kafka finishes starting. The service init
+# containers wait for these topics before the services themselves start.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-init
+  labels:
+    app: kafka-init
+spec:
+  backoffLimit: 20
+  template:
+    metadata:
+      labels:
+        app: kafka-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: topics
+          image: apache/kafka:3.8.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              for topic in payments.requested payments.completed payments.failed payments.requested.DLT; do
+                /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 \
+                  --create --if-not-exists --topic "$topic" --partitions 3 --replication-factor 1
+              done
+              echo "Kafka topics ready"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

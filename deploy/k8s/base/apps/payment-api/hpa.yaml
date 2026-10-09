@@ -1,0 +1,23 @@
+# minReplicas == maxReplicas == 2 pins the service at exactly two instances:
+# the HPA keeps reconciling the count back to 2, so a manual scale-down or a
+# crashed replica is corrected instead of silently leaving one instance running.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: payment-api
+  labels:
+    app: payment-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: payment-api
+  minReplicas: 2
+  maxReplicas: 2
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80

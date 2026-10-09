@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softfal.com/contracts/payment.requested.v1.json",
+  "title": "PaymentRequested",
+  "description": "Event published to payments.requested when a new payment is submitted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["paymentId", "accountId", "amount", "currency", "createdAt"],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Idempotency key; also used as the Kafka message key."
+    },
+    "accountId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "amount": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

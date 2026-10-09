@@ -1,0 +1,22 @@
+# Build artifacts and local state must not leak into the image build context.
+**/target
+**/data
+**/*.iml
+
+# IDE and local development tooling.
+.idea
+.run
+bruno
+scripts
+.git
+.gitignore
+
+# Compose files are not needed to build the images.
+docker-compose*.yml
+compose*.yml
+
+# Local environment with credentials.
+.env
+
+.DS_Store
+HELP.md

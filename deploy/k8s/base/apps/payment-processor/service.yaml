@@ -1,0 +1,14 @@
+# Management/health endpoint only; payment-processor has no business API.
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-processor
+  labels:
+    app: payment-processor
+spec:
+  selector:
+    app: payment-processor
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

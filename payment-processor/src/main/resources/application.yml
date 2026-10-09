@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: payment-processor
+  config:
+    # Shared Micrometer/Prometheus conventions from the payments-observability module.
+    import: classpath:payments-observability.yml
+  jackson:
+    deserialization:
+      use-big-decimal-for-floats: true
+  datasource:
+    url: jdbc:h2:file:./data/payment-processor;AUTO_SERVER=TRUE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: payment-processor
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: com.softfal.payment_processor.kafka.EventEnvelopeDeserializer
+        spring.json.use.type.headers: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        spring.json.add.type.headers: false
+    listener:
+      ack-mode: record
+
+payment:
+  mock:
+    success-rate: 0.8
+    delay-ms: 200
+  outbox:
+    poll-interval-ms: 500
+    initial-delay-ms: 500
+    batch-size: 100
+    max-attempts: 10
+    retry-backoff-ms: 1000
+    max-backoff-ms: 60000
+    cleanup-interval-ms: 3600000
+    retention: 24h
+
+logging:
+  level:
+    root: INFO
+    com.softfal.payment_processor: DEBUG

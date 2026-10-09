@@ -1,0 +1,18 @@
+# Local k3d only: a known Grafana admin login for the development cluster. The
+# base Deployment intentionally ships no admin credentials (Grafana generates a
+# random password on first boot), so the plaintext dev credentials live only in
+# this overlay. Anonymous Viewer access is still configured in the base.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+spec:
+  template:
+    spec:
+      containers:
+        - name: grafana
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: admin
