@@ -1,6 +1,7 @@
 package com.softfal.payments.gateway;
 
 import com.softfal.payments.gateway.stripe.StripePaymentGateway;
+import com.softfal.payments.gateway.stripe.StripePaymentGatewayWebhook;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -14,11 +15,25 @@ class StripeGatewayAutoConfigurationTest {
     @Test
     void registersStripeGatewayWhenProviderIsStripeAndKeyIsPresent() {
         contextRunner
-                .withPropertyValues("payment.gateway.provider=stripe", "payment.stripe.api-key=sk_test_123")
+                .withPropertyValues("payment.gateway.provider=stripe",
+                        "payment.stripe.api-key=sk_test_123",
+                        "payment.stripe.webhook-secret=whsec_test")
                 .run(context -> assertThat(context)
                         .hasSingleBean(PaymentGateway.class)
                         .getBean(PaymentGateway.class)
                         .isInstanceOf(StripePaymentGateway.class));
+    }
+
+    @Test
+    void registersWebhookAdapterWhenProviderIsStripe() {
+        contextRunner
+                .withPropertyValues("payment.gateway.provider=stripe",
+                        "payment.stripe.api-key=sk_test_123",
+                        "payment.stripe.webhook-secret=whsec_test")
+                .run(context -> assertThat(context)
+                        .hasSingleBean(PaymentGatewayWebhook.class)
+                        .getBean(PaymentGatewayWebhook.class)
+                        .isInstanceOf(StripePaymentGatewayWebhook.class));
     }
 
     @Test
@@ -38,5 +53,16 @@ class StripeGatewayAutoConfigurationTest {
         contextRunner
                 .withPropertyValues("payment.gateway.provider=stripe")
                 .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void failsFastWhenProviderIsStripeWithoutWebhookSecret() {
+        contextRunner
+                .withPropertyValues("payment.gateway.provider=stripe", "payment.stripe.api-key=sk_test_123")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasMessageContaining("payment.stripe.webhook-secret");
+                });
     }
 }

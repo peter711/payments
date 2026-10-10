@@ -27,7 +27,12 @@ public interface ProcessedPaymentStore {
     void claim(String paymentId);
 
     /**
-     * Persists the final outcome for the given payment.
+     * Persists the final outcome for the given payment, advancing its status only
+     * if the new status ranks higher ({@code IN_PROGRESS < FAILED < COMPLETED}).
+     * A lower- or equal-ranked write is a no-op, so a slow synchronous write can
+     * never clobber a provider-confirmed reconciliation (or vice versa).
+     *
+     * @return {@code true} if the state advanced, {@code false} if it was a no-op
      */
-    void complete(PaymentOutcome outcome);
+    boolean complete(PaymentOutcome outcome);
 }

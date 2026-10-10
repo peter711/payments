@@ -83,9 +83,9 @@ bounded tag set. See `PaymentApiMetrics`, `PaymentProcessorMetrics` and
 
 | Service | Metrics |
 |---|---|
-| payment-api | `payments.api.requests{result=accepted}`, `payments.api.publish.errors` |
-| payment-processor | `payments.processor.outcomes{result}`, `payments.processor.duplicates`, `payments.processor.gateway.duration`, `payments.processor.outbox.published`, `payments.processor.outbox.publish.failures`, `payments.processor.outbox.pending` (gauge), `payments.processor.dlq` |
-| notification-service | `notifications.sent{result}`, `notifications.duplicates` |
+| payment-api | `payments.api.requests{result=accepted}`, `payments.api.publish.errors`, `payments.api.webhook.received{result}` |
+| payment-processor | `payments.processor.outcomes{result}`, `payments.processor.duplicates`, `payments.processor.gateway.duration`, `payments.processor.outbox.published`, `payments.processor.outbox.publish.failures`, `payments.processor.outbox.pending` (gauge), `payments.processor.dlq`, `payments.processor.corrections` |
+| notification-service | `notifications.sent{result}`, `notifications.duplicates`, `notifications.corrections` |
 
 The `payments-observability` module already attaches the common `application` and
 `env` tags, so new meters inherit them automatically.

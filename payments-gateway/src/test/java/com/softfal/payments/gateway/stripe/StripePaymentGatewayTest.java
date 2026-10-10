@@ -46,7 +46,7 @@ class StripePaymentGatewayTest {
         // maxNetworkRetries=0 keeps the failure tests fast and deterministic.
         gateway = new StripePaymentGateway(
                 new StripeClient("sk_test_123"),
-                new StripeGatewayProperties("sk_test_123", server.baseUrl(), "pm_card_visa", 2000, 0));
+                new StripeGatewayProperties("sk_test_123", server.baseUrl(), "pm_card_visa", 2000, 0, null));
     }
 
     @AfterEach

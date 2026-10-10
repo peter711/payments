@@ -56,7 +56,8 @@ services:
     command:
       - |
         set -e
-        for topic in payments.requested payments.completed payments.failed payments.requested.DLT; do
+        for topic in payments.requested payments.completed payments.failed payments.corrected \
+                     payments.provider.events payments.requested.DLT payments.provider.events.DLT; do
           /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 \
             --create --if-not-exists --topic "$$topic" --partitions 3 --replication-factor 1
         done
@@ -168,6 +169,13 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       # ECS JSON logs, collected by the Alloy service and stored in Loki.
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+      # Inbound Stripe webhooks. The webhook host may use a different provider
+      # than the processor: set PAYMENT_API_GATEWAY_PROVIDER=stripe to expose
+      # POST /webhooks/stripe while the processor stays on the mock gateway.
+      # Falls back to the shared PAYMENT_GATEWAY_PROVIDER, then to mock.
+      PAYMENT_GATEWAY_PROVIDER: ${PAYMENT_API_GATEWAY_PROVIDER:-${PAYMENT_GATEWAY_PROVIDER:-mock}}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     depends_on:
       kafka-init:
         condition: service_completed_successfully
@@ -187,6 +195,7 @@ services:
       # from .env and never committed.
       PAYMENT_GATEWAY_PROVIDER: ${PAYMENT_GATEWAY_PROVIDER:-mock}
       STRIPE_API_KEY: ${STRIPE_API_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     volumes:
       - payment-processor-data:/app/data
     depends_on:

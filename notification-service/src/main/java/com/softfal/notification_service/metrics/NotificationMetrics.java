@@ -17,12 +17,16 @@ public class NotificationMetrics {
     private final Counter sent;
     private final Counter failures;
     private final Counter duplicates;
+    private final Counter corrections;
 
     public NotificationMetrics(MeterRegistry registry) {
         this.sent = notification(registry, "success");
         this.failures = notification(registry, "failure");
         this.duplicates = Counter.builder("notifications.duplicates")
                 .description("Payment outcomes skipped because a notification was already sent")
+                .register(registry);
+        this.corrections = Counter.builder("notifications.corrections")
+                .description("Correction notifications dispatched for a corrected outcome")
                 .register(registry);
     }
 
@@ -43,5 +47,9 @@ public class NotificationMetrics {
 
     public void duplicateSkipped() {
         duplicates.increment();
+    }
+
+    public void correctionSent() {
+        corrections.increment();
     }
 }

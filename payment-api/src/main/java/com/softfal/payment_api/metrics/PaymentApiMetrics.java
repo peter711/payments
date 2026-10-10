@@ -15,6 +15,9 @@ public class PaymentApiMetrics {
 
     private final Counter acceptedRequests;
     private final Counter publishErrors;
+    private final Counter webhookAccepted;
+    private final Counter webhookVerificationFailed;
+    private final Counter webhookUnmapped;
 
     public PaymentApiMetrics(MeterRegistry registry) {
         this.acceptedRequests = Counter.builder("payments.api.requests")
@@ -24,6 +27,16 @@ public class PaymentApiMetrics {
         this.publishErrors = Counter.builder("payments.api.publish.errors")
                 .description("Payment events that failed to publish to Kafka")
                 .register(registry);
+        this.webhookAccepted = webhook(registry, "accepted");
+        this.webhookVerificationFailed = webhook(registry, "verification_failed");
+        this.webhookUnmapped = webhook(registry, "unmapped");
+    }
+
+    private static Counter webhook(MeterRegistry registry, String result) {
+        return Counter.builder("payments.api.webhook.received")
+                .description("Inbound provider webhook requests handled by the API")
+                .tag("result", result)
+                .register(registry);
     }
 
     public void requestAccepted() {
@@ -32,5 +45,17 @@ public class PaymentApiMetrics {
 
     public void publishFailed() {
         publishErrors.increment();
+    }
+
+    public void webhookAccepted() {
+        webhookAccepted.increment();
+    }
+
+    public void webhookVerificationFailed() {
+        webhookVerificationFailed.increment();
+    }
+
+    public void webhookUnmapped() {
+        webhookUnmapped.increment();
     }
 }

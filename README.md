@@ -101,6 +101,19 @@ while other test methods such as `pm_card_visa_chargeDeclined` return a decline.
 charge. See [docs/configuration.md](docs/configuration.md) for the full set of
 Stripe properties.
 
+With the Stripe provider enabled, `payment-api` also exposes
+`POST /webhooks/stripe`. Stripe signs every request, so set the signing secret
+and forward events locally:
+
+```bash
+export STRIPE_WEBHOOK_SECRET=whsec_...     # printed by `stripe listen`
+stripe listen --forward-to localhost:8080/webhooks/stripe
+```
+
+A provider event finalizes a payment whose synchronous outcome was lost, and
+corrects a provisional failure to a success via a `payment.corrected` event.
+See [docs/operations.md](docs/operations.md#local-stripe-webhooks).
+
 ## Documentation
 
 | Document | Contents |

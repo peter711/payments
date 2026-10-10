@@ -40,7 +40,10 @@ Defined once in `payments-contracts` (`PaymentTopics`), never as string literals
 | `payments.requested` | payment-api | payment-processor |
 | `payments.completed` | payment-processor (outbox) | notification-service |
 | `payments.failed` | payment-processor (outbox) | notification-service |
+| `payments.corrected` | payment-processor (outbox) | notification-service |
+| `payments.provider.events` | payment-api (Stripe webhook) | payment-processor |
 | `payments.requested.DLT` | payment-processor (error handler) | (operators / tooling) |
+| `payments.provider.events.DLT` | payment-processor (error handler) | (operators / tooling) |
 
 ## Event envelope
 
@@ -71,6 +74,8 @@ consumers alike.
 | `payment.requested` | `payments.requested` | 1 | `payment.requested.v1.json` |
 | `payment.completed` | `payments.completed` | 1 | `payment.completed.v1.json` |
 | `payment.failed` | `payments.failed` | 1 | `payment.failed.v1.json` |
+| `payment.corrected` | `payments.corrected` | 1 | `payment.corrected.v1.json` |
+| `payment.provider_event` | `payments.provider.events` | 1 | `payment.provider_event.v1.json` |
 
 The schemas live in `payments-contracts/src/main/resources/schema`. A build-time
 test validates sample events against them, so the wire format cannot drift
@@ -179,11 +184,46 @@ synchronous call:
 - `paymentId` is sent as the `Idempotency-Key`, so a retry returns the original
   `PaymentIntent` instead of charging twice;
 - only the `succeeded` status is a success. Other statuses (`requires_action`,
-  `processing`, ...) are recorded as failures — asynchronous confirmation and
-  webhooks are out of scope for this flow;
+  `processing`, ...) are recorded as failures; a later provider-confirmed
+  success is recovered by the reconciliation flow below;
 - transient Stripe errors (connection, rate limit) surface as
   `GatewayTimeoutException` so the record is retried, while a `CardException`
   (decline) is recorded as a normal failure.
+
+## Provider reconciliation
+
+The synchronous flow can leave a payment diverged from the provider: a charge
+whose outcome was never recorded (the record was dead-lettered and the row is
+stuck `IN_PROGRESS`) or a provisional failure (`requires_action`/`processing`
+recorded as `FAILED`) that Stripe later completes. Signed Stripe webhooks close
+that gap as a safety net; the synchronous flow is unchanged.
+
+`payment-api` exposes `POST /webhooks/stripe` when
+`payment.gateway.provider=stripe`. It verifies the `Stripe-Signature` header
+over the raw body in the `payments-gateway` adapter, translates the supported
+payment-intent events (`succeeded`, `payment_failed`, `canceled`) into a domain
+`payment.provider_event`, and publishes it. An invalid signature returns `400`;
+an unsupported event or one with no `paymentId` metadata returns `200` with no
+side effect. The gateway's own `paymentId`/`accountId` metadata makes the
+payment resolvable without a lookup table.
+
+`payment-processor` consumes `payments.provider.events` and reconciles the
+outcome. Payment status advances **monotonically**
+(`IN_PROGRESS < FAILED < COMPLETED`): the durable write only moves a payment up,
+so a slow synchronous write can never clobber a provider result (or vice versa).
+
+| Previous state | Provider report | Result |
+|---|---|---|
+| `IN_PROGRESS` | succeeded | `COMPLETED` → `payment.completed` |
+| `IN_PROGRESS` | failed / canceled | `FAILED` → `payment.failed` |
+| `FAILED` | succeeded | `COMPLETED` → **`payment.corrected`** |
+| `COMPLETED` | anything | no-op |
+
+A correction is a dedicated event because the failure was already announced;
+`notification-service` resolves the notified outcome per payment monotonically
+and suppresses a lower-ranked outcome that arrives later (the outcome topics
+have no relative order). See the gateway metadata and the `EventType` registry
+for the exact fields.
 
 ## Mock components
 

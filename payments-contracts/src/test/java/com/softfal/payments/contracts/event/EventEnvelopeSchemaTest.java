@@ -134,6 +134,12 @@ class EventEnvelopeSchemaTest {
                     new PaymentCompleted("pay-1", "acc-1", new BigDecimal("12.34"), "PLN", TIMESTAMP);
             case PAYMENT_FAILED ->
                     new PaymentFailed("pay-1", "acc-1", new BigDecimal("12.34"), "PLN", "declined", TIMESTAMP);
+            case PAYMENT_PROVIDER_EVENT ->
+                    new PaymentProviderEvent("pay-1", "acc-1", new BigDecimal("12.34"), "PLN",
+                            ProviderPaymentStatus.SUCCEEDED, "evt-1", null, TIMESTAMP);
+            case PAYMENT_CORRECTED ->
+                    new PaymentCorrected("pay-1", "acc-1", new BigDecimal("12.34"), "PLN",
+                            "FAILED", "COMPLETED", TIMESTAMP);
         };
     }
 

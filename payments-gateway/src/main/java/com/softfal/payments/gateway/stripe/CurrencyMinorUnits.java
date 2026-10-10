@@ -54,4 +54,14 @@ public final class CurrencyMinorUnits {
         }
         return ZERO_DECIMAL_CURRENCIES.contains(currency.toUpperCase(Locale.ROOT)) ? 0 : DEFAULT_EXPONENT;
     }
+
+    /**
+     * Converts an amount from the currency's minor unit back to major units (for
+     * example {@code 1234 PLN -> 12.34}), the inverse of {@link #toMinorUnits}.
+     *
+     * @throws InvalidGatewayRequestException when the currency is missing
+     */
+    public static BigDecimal fromMinorUnits(long minorUnits, String currency) {
+        return BigDecimal.valueOf(minorUnits, exponentFor(currency));
+    }
 }

@@ -4,6 +4,7 @@ import com.softfal.payment_api.metrics.PaymentApiMetrics;
 import com.softfal.payments.contracts.event.EventEnvelope;
 import com.softfal.payments.contracts.event.EventEnvelopes;
 import com.softfal.payments.contracts.event.EventType;
+import com.softfal.payments.contracts.event.PaymentProviderEvent;
 import com.softfal.payments.contracts.event.PaymentRequested;
 import com.softfal.payments.contracts.topic.PaymentTopics;
 import com.softfal.payments.observability.LogContext;
@@ -76,6 +77,39 @@ public class PaymentEventService {
                                         result.getRecordMetadata().partition(),
                                         result.getRecordMetadata().offset());
                             }
+                        }
+                    });
+        }
+    }
+
+    /**
+     * Publishes a provider status update to the {@code payments.provider.events}
+     * topic, keyed and correlated by {@code paymentId} so the reconciliation
+     * event stays on the same partition as the payment's other events.
+     *
+     * @param event the provider-reported update
+     */
+    public void sendProviderEvent(PaymentProviderEvent event) {
+        String correlationId = event.paymentId();
+        EventEnvelope envelope =
+                EventEnvelopes.wrap(EventType.PAYMENT_PROVIDER_EVENT, event, objectMapper, correlationId, null);
+
+        try (var logContext = LogContext.scope()
+                .correlationId(correlationId)
+                .eventId(envelope.eventId())
+                .eventType(envelope.eventType())
+                .paymentId(event.paymentId())
+                .accountId(event.accountId())) {
+            log.info("Publishing {} to topic '{}' for paymentId={} eventId={}",
+                    EventType.PAYMENT_PROVIDER_EVENT.eventType(), PaymentTopics.PROVIDER_EVENTS,
+                    event.paymentId(), envelope.eventId());
+
+            kafkaTemplate.send(PaymentTopics.PROVIDER_EVENTS, event.paymentId(), envelope)
+                    .whenComplete((result, ex) -> {
+                        if (ex != null) {
+                            metrics.publishFailed();
+                            log.error("Failed to publish provider event for paymentId={}",
+                                    event.paymentId(), ex);
                         }
                     });
         }

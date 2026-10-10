@@ -10,6 +10,11 @@ import java.time.Instant;
 /**
  * H2-backed {@link NotificationDedupStore}. Durability matters because the
  * duplicate outcome usually arrives after a processor restart.
+ *
+ * <p>The announcement is guarded by a conditional insert: a row is written only
+ * when no higher- or equal-ranked outcome exists for the payment, so the check
+ * and the write happen in one statement and two listeners cannot both announce
+ * the same rank for a payment.</p>
  */
 @Repository
 public class JdbcNotificationDedupStore implements NotificationDedupStore {
@@ -21,18 +26,26 @@ public class JdbcNotificationDedupStore implements NotificationDedupStore {
     }
 
     @Override
-    public boolean markProcessed(String eventId, String paymentId, String topic) {
+    public boolean markProcessed(String eventId, String paymentId, String topic, int outcomeRank) {
         try {
-            jdbcTemplate.update("""
-                            INSERT INTO notification_log (event_id, payment_id, topic, notified_at)
-                            VALUES (?, ?, ?, ?)
+            int inserted = jdbcTemplate.update("""
+                            INSERT INTO notification_log (event_id, payment_id, topic, outcome_rank, notified_at)
+                            SELECT ?, ?, ?, ?, ?
+                            FROM (SELECT 1) AS probe
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM notification_log WHERE payment_id = ? AND outcome_rank >= ?
+                            )
                             """,
                     eventId,
                     paymentId,
                     topic,
-                    Timestamp.from(Instant.now()));
-            return true;
+                    outcomeRank,
+                    Timestamp.from(Instant.now()),
+                    paymentId,
+                    outcomeRank);
+            return inserted > 0;
         } catch (DuplicateKeyException ex) {
+            // The same (paymentId, topic) was already recorded.
             return false;
         }
     }

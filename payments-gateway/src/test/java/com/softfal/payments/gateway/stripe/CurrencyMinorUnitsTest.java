@@ -23,6 +23,12 @@ class CurrencyMinorUnitsTest {
     }
 
     @Test
+    void convertsMinorUnitsBackToMajorUnits() {
+        assertThat(CurrencyMinorUnits.fromMinorUnits(1234L, "PLN")).isEqualByComparingTo("12.34");
+        assertThat(CurrencyMinorUnits.fromMinorUnits(1000L, "jpy")).isEqualByComparingTo("1000");
+    }
+
+    @Test
     void rejectsAmountWithMorePrecisionThanTheCurrencyAllows() {
         assertThatThrownBy(() -> CurrencyMinorUnits.toMinorUnits(new BigDecimal("10.005"), "PLN"))
                 .isInstanceOf(InvalidGatewayRequestException.class)

@@ -72,6 +72,30 @@ class PaymentEventSchemaTest {
         assertValid("payment.failed.v1.json", event);
     }
 
+    @Test
+    void serializedPaymentProviderEventMatchesSchema() {
+        PaymentProviderEvent event = new PaymentProviderEvent("pay-1", "acc-1", new BigDecimal("12.34"), "PLN",
+                ProviderPaymentStatus.SUCCEEDED, "evt-1", null, TIMESTAMP);
+
+        assertValid("payment.provider_event.v1.json", event);
+    }
+
+    @Test
+    void serializedPaymentProviderEventWithReasonMatchesSchema() {
+        PaymentProviderEvent event = new PaymentProviderEvent("pay-1", "acc-1", new BigDecimal("12.34"), "PLN",
+                ProviderPaymentStatus.FAILED, "evt-1", "declined", TIMESTAMP);
+
+        assertValid("payment.provider_event.v1.json", event);
+    }
+
+    @Test
+    void serializedPaymentCorrectedMatchesSchema() {
+        PaymentCorrected event = new PaymentCorrected("pay-1", "acc-1", new BigDecimal("12.34"), "PLN",
+                "FAILED", "COMPLETED", TIMESTAMP);
+
+        assertValid("payment.corrected.v1.json", event);
+    }
+
     static Stream<Arguments> invalidPayloads() {
         return Stream.of(
                 Arguments.of("payment.requested.v1.json",
@@ -91,7 +115,16 @@ class PaymentEventSchemaTest {
                         "missing completedAt"),
                 Arguments.of("payment.failed.v1.json",
                         "{\"paymentId\":\"pay-1\",\"accountId\":\"acc-1\",\"amount\":10.00,\"currency\":\"PLN\",\"reason\":42,\"failedAt\":\"2026-01-01T00:00:00Z\"}",
-                        "reason of wrong type"));
+                        "reason of wrong type"),
+                Arguments.of("payment.provider_event.v1.json",
+                        "{\"paymentId\":\"pay-1\",\"accountId\":\"acc-1\",\"amount\":10.00,\"currency\":\"PLN\",\"providerStatus\":\"PENDING\",\"providerEventId\":\"evt-1\",\"reason\":null,\"occurredAt\":\"2026-01-01T00:00:00Z\"}",
+                        "unknown provider status"),
+                Arguments.of("payment.provider_event.v1.json",
+                        "{\"paymentId\":\"pay-1\",\"accountId\":\"acc-1\",\"amount\":10.00,\"currency\":\"PLN\",\"providerStatus\":\"SUCCEEDED\",\"reason\":null,\"occurredAt\":\"2026-01-01T00:00:00Z\"}",
+                        "missing provider event id"),
+                Arguments.of("payment.corrected.v1.json",
+                        "{\"paymentId\":\"pay-1\",\"accountId\":\"acc-1\",\"amount\":10.00,\"currency\":\"PLN\",\"newStatus\":\"COMPLETED\",\"correctedAt\":\"2026-01-01T00:00:00Z\"}",
+                        "missing previous status"));
     }
 
     @ParameterizedTest(name = "rejects {2}")
@@ -112,6 +145,10 @@ class PaymentEventSchemaTest {
                 new PaymentCompleted("pay-1", "acc-1", new BigDecimal("12.34"), "PLN", TIMESTAMP);
         PaymentFailed failed =
                 new PaymentFailed("pay-1", "acc-1", new BigDecimal("12.34"), "PLN", "declined", TIMESTAMP);
+        PaymentProviderEvent providerEvent = new PaymentProviderEvent("pay-1", "acc-1", new BigDecimal("12.34"), "PLN",
+                ProviderPaymentStatus.SUCCEEDED, "evt-1", null, TIMESTAMP);
+        PaymentCorrected corrected = new PaymentCorrected("pay-1", "acc-1", new BigDecimal("12.34"), "PLN",
+                "FAILED", "COMPLETED", TIMESTAMP);
 
         assertThat(MAPPER.readValue(MAPPER.writeValueAsString(requested), PaymentRequested.class))
                 .isEqualTo(requested);
@@ -119,6 +156,10 @@ class PaymentEventSchemaTest {
                 .isEqualTo(completed);
         assertThat(MAPPER.readValue(MAPPER.writeValueAsString(failed), PaymentFailed.class))
                 .isEqualTo(failed);
+        assertThat(MAPPER.readValue(MAPPER.writeValueAsString(providerEvent), PaymentProviderEvent.class))
+                .isEqualTo(providerEvent);
+        assertThat(MAPPER.readValue(MAPPER.writeValueAsString(corrected), PaymentCorrected.class))
+                .isEqualTo(corrected);
     }
 
     @Test

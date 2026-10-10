@@ -55,6 +55,11 @@ public class NotificationListener {
         handle(record.topic(), record.value());
     }
 
+    @KafkaListener(topics = PaymentTopics.CORRECTED)
+    public void onPaymentCorrected(ConsumerRecord<String, EventEnvelope> record) {
+        handle(record.topic(), record.value());
+    }
+
     private void handle(String topic, EventEnvelope envelope) {
         try (var logContext = LogContext.scope()
                 .topic(topic)
@@ -72,8 +77,8 @@ public class NotificationListener {
             String paymentId = event.paymentId();
             logContext.paymentId(paymentId);
             if (paymentId != null && !paymentId.isBlank()
-                    && !dedupStore.markProcessed(envelope.eventId(), paymentId, topic)) {
-                log.warn("Duplicate outcome for paymentId={} on topic '{}'; skipping notification",
+                    && !dedupStore.markProcessed(envelope.eventId(), paymentId, topic, rankOf(topic))) {
+                log.warn("Duplicate or lower-ranked outcome for paymentId={} on topic '{}'; skipping notification",
                         paymentId, topic);
                 metrics.duplicateSkipped();
                 return;
@@ -82,11 +87,22 @@ public class NotificationListener {
             try {
                 notificationSender.send(topic, event);
                 metrics.notificationSent();
+                if (PaymentTopics.CORRECTED.equals(topic)) {
+                    metrics.correctionSent();
+                }
             } catch (RuntimeException ex) {
                 metrics.notificationFailed();
                 throw ex;
             }
         }
+    }
+
+    /**
+     * Monotonic rank of an outcome: a success (including a correction) outranks a
+     * failure, so a lower-ranked outcome delivered after a higher one is skipped.
+     */
+    private static int rankOf(String topic) {
+        return PaymentTopics.FAILED.equals(topic) ? 1 : 2;
     }
 
     /**

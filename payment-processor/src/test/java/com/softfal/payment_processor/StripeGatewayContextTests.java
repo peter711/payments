@@ -19,10 +19,11 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "payment.gateway.provider=stripe",
-        "payment.stripe.api-key=sk_test_dummy"
+        "payment.stripe.api-key=sk_test_dummy",
+        "payment.stripe.webhook-secret=whsec_dummy"
 })
 @EmbeddedKafka(partitions = 1,
-        topics = {"payments.requested"},
+        topics = {"payments.requested", "payments.provider.events"},
         bootstrapServersProperty = "spring.kafka.bootstrap-servers")
 class StripeGatewayContextTests {
 

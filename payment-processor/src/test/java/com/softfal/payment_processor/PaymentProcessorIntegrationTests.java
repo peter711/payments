@@ -5,7 +5,11 @@ import com.softfal.payments.contracts.event.EventEnvelope;
 import com.softfal.payments.contracts.event.EventEnvelopes;
 import com.softfal.payments.contracts.event.EventType;
 import com.softfal.payments.contracts.event.PaymentCompleted;
+import com.softfal.payments.contracts.event.PaymentCorrected;
+import com.softfal.payments.contracts.event.PaymentProviderEvent;
 import com.softfal.payments.contracts.event.PaymentRequested;
+import com.softfal.payments.contracts.event.ProviderPaymentStatus;
+import com.softfal.payments.contracts.topic.PaymentTopics;
 import com.softfal.payments.gateway.PaymentGateway;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -52,7 +56,8 @@ import static org.mockito.Mockito.verify;
         "spring.sql.init.mode=always"
 })
 @EmbeddedKafka(partitions = 1,
-        topics = {"payments.requested", "payments.completed", "payments.failed", "payments.requested.DLT"},
+        topics = {"payments.requested", "payments.completed", "payments.failed", "payments.requested.DLT",
+                "payments.provider.events", "payments.provider.events.DLT", "payments.corrected"},
         bootstrapServersProperty = "spring.kafka.bootstrap-servers")
 class PaymentProcessorIntegrationTests {
 
@@ -144,6 +149,43 @@ class PaymentProcessorIntegrationTests {
     }
 
     @Test
+    void correctsAProvisionalFailureFromAProviderEvent() throws Exception {
+        jdbcTemplate.update("""
+                INSERT INTO processed_payment
+                    (payment_id, account_id, amount, currency, status, reason, claimed_at, completed_at)
+                VALUES (?, ?, ?, ?, 'FAILED', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """, "pay-correct-it", "acc-1", new BigDecimal("12.34"), "PLN", "requires_action");
+
+        sendProviderEvent("pay-correct-it", "acc-1", ProviderPaymentStatus.SUCCEEDED);
+
+        EventEnvelope envelope = awaitEnvelope(PaymentTopics.CORRECTED, "test-corrected",
+                candidate -> "pay-correct-it".equals(paymentIdOf(candidate)));
+        PaymentCorrected corrected = EventEnvelopes.payload(envelope, PaymentCorrected.class, objectMapper);
+
+        assertThat(corrected.previousStatus()).isEqualTo("FAILED");
+        assertThat(corrected.newStatus()).isEqualTo("COMPLETED");
+        verify(paymentGateway, times(0)).callPaymentGateway(any());
+    }
+
+    @Test
+    void finalizesAStuckInProgressPaymentFromAProviderEvent() throws Exception {
+        jdbcTemplate.update("""
+                INSERT INTO processed_payment (payment_id, status, claimed_at)
+                VALUES (?, 'IN_PROGRESS', CURRENT_TIMESTAMP)
+                """, "pay-stuck-it");
+
+        sendProviderEvent("pay-stuck-it", "acc-1", ProviderPaymentStatus.SUCCEEDED);
+
+        EventEnvelope envelope = awaitEnvelope(PaymentTopics.COMPLETED, "test-stuck",
+                candidate -> "pay-stuck-it".equals(paymentIdOf(candidate)));
+        PaymentCompleted completed = EventEnvelopes.payload(envelope, PaymentCompleted.class, objectMapper);
+
+        assertThat(completed.paymentId()).isEqualTo("pay-stuck-it");
+        assertThat(completed.accountId()).isEqualTo("acc-1");
+        verify(paymentGateway, times(0)).callPaymentGateway(any());
+    }
+
+    @Test
     void publishesRawRecordToDeadLetterTopicWhenValueCannotBeDeserialized() throws Exception {
         String invalidPayload = "this-is-not-json";
         DefaultKafkaProducerFactory<String, String> rawProducerFactory = new DefaultKafkaProducerFactory<>(
@@ -173,6 +215,18 @@ class PaymentProcessorIntegrationTests {
 
     private EventEnvelope envelope(PaymentRequested event) {
         return EventEnvelopes.wrap(EventType.PAYMENT_REQUESTED, event, objectMapper, "corr-it", null);
+    }
+
+    private void sendProviderEvent(String paymentId, String accountId, ProviderPaymentStatus status) throws Exception {
+        PaymentProviderEvent event = new PaymentProviderEvent(paymentId, accountId, new BigDecimal("12.34"), "PLN",
+                status, "evt-" + paymentId, status == ProviderPaymentStatus.FAILED ? "declined" : null, Instant.now());
+        EventEnvelope envelope =
+                EventEnvelopes.wrap(EventType.PAYMENT_PROVIDER_EVENT, event, objectMapper, paymentId, null);
+        kafkaTemplate.send(PaymentTopics.PROVIDER_EVENTS, paymentId, envelope).get(10, TimeUnit.SECONDS);
+    }
+
+    private static String paymentIdOf(EventEnvelope envelope) {
+        return envelope.payload().get("paymentId").asText();
     }
 
     /**

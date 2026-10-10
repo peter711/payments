@@ -26,6 +26,7 @@ public class PaymentProcessorMetrics {
     private final Counter outboxPublished;
     private final Counter outboxPublishFailures;
     private final Counter deadLettered;
+    private final Counter corrections;
     private final Timer gatewayLatency;
 
     public PaymentProcessorMetrics(MeterRegistry registry, OutboxStore outboxStore) {
@@ -43,6 +44,9 @@ public class PaymentProcessorMetrics {
                 .register(registry);
         this.deadLettered = Counter.builder("payments.processor.dlq")
                 .description("Records routed to the payments.requested dead letter topic")
+                .register(registry);
+        this.corrections = Counter.builder("payments.processor.corrections")
+                .description("Recorded failures corrected to a success by a provider event")
                 .register(registry);
         this.gatewayLatency = Timer.builder("payments.processor.gateway.duration")
                 .description("Time spent calling the payment gateway")
@@ -85,5 +89,9 @@ public class PaymentProcessorMetrics {
 
     public void deadLettered() {
         deadLettered.increment();
+    }
+
+    public void correctionApplied() {
+        corrections.increment();
     }
 }

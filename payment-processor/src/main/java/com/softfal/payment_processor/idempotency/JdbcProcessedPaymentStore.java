@@ -57,11 +57,13 @@ public class JdbcProcessedPaymentStore implements ProcessedPaymentStore {
     }
 
     @Override
-    public void complete(PaymentOutcome outcome) {
-        jdbcTemplate.update("""
+    public boolean complete(PaymentOutcome outcome) {
+        int updated = jdbcTemplate.update("""
                         UPDATE processed_payment
                         SET account_id = ?, amount = ?, currency = ?, status = ?, reason = ?, completed_at = ?
                         WHERE payment_id = ?
+                          AND (CASE ? WHEN 'IN_PROGRESS' THEN 0 WHEN 'FAILED' THEN 1 WHEN 'COMPLETED' THEN 2 ELSE 0 END)
+                              > (CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'FAILED' THEN 1 WHEN 'COMPLETED' THEN 2 ELSE 0 END)
                         """,
                 outcome.accountId(),
                 outcome.amount(),
@@ -69,7 +71,9 @@ public class JdbcProcessedPaymentStore implements ProcessedPaymentStore {
                 outcome.successful() ? "COMPLETED" : "FAILED",
                 outcome.reason(),
                 Timestamp.from(outcome.completedAt()),
-                outcome.paymentId());
+                outcome.paymentId(),
+                outcome.successful() ? "COMPLETED" : "FAILED");
+        return updated > 0;
     }
 
     private static PaymentOutcome map(ResultSet rs) throws SQLException {

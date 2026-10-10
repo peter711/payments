@@ -61,6 +61,24 @@ spec:
               value: kafka:19092
             - name: PAYMENTS_ENV
               value: production
+            # Inbound Stripe webhooks. With provider=stripe the service exposes
+            # POST /webhooks/stripe (already routed by the "/" ingress path) and
+            # requires the Stripe secrets; the references are optional so the
+            # default mock deployment needs nothing extra.
+            - name: PAYMENT_GATEWAY_PROVIDER
+              value: mock
+            - name: STRIPE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-credentials
+                  key: api-key
+                  optional: true
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-credentials
+                  key: webhook-secret
+                  optional: true
             # Emit ECS JSON logs so Alloy/Loki can index them.
             - name: LOGGING_STRUCTURED_FORMAT_CONSOLE
               value: ecs

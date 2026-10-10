@@ -3,6 +3,7 @@ package com.softfal.notification_service;
 import com.softfal.notification_service.gateway.NotificationSender;
 import com.softfal.payments.contracts.event.EventType;
 import com.softfal.payments.contracts.event.PaymentCompleted;
+import com.softfal.payments.contracts.event.PaymentCorrected;
 import com.softfal.payments.contracts.event.PaymentFailed;
 import com.softfal.payments.contracts.topic.PaymentTopics;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -33,7 +34,7 @@ import static org.mockito.Mockito.verify;
         "spring.datasource.password="
 })
 @EmbeddedKafka(partitions = 1,
-        topics = {PaymentTopics.COMPLETED, PaymentTopics.FAILED},
+        topics = {PaymentTopics.COMPLETED, PaymentTopics.FAILED, PaymentTopics.CORRECTED},
         bootstrapServersProperty = "spring.kafka.bootstrap-servers")
 class NotificationListenerIntegrationTests {
 
@@ -75,6 +76,17 @@ class NotificationListenerIntegrationTests {
                 failedJson("pay-fail", "acc-2", "20.00", "declined")));
 
         verify(notificationSender, timeout(VERIFY_TIMEOUT_MS)).send(eq(PaymentTopics.FAILED), eq(expected));
+    }
+
+    @Test
+    void forwardsCorrectionEventToSender() throws Exception {
+        PaymentCorrected expected = new PaymentCorrected("pay-corr", "acc-3", new BigDecimal("5.00"), "PLN",
+                "FAILED", "COMPLETED", TIMESTAMP);
+
+        send(PaymentTopics.CORRECTED, "pay-corr", envelope("evt-corr", EventType.PAYMENT_CORRECTED,
+                correctedJson("pay-corr", "acc-3", "5.00")));
+
+        verify(notificationSender, timeout(VERIFY_TIMEOUT_MS)).send(eq(PaymentTopics.CORRECTED), eq(expected));
     }
 
     @Test
@@ -121,6 +133,16 @@ class NotificationListenerIntegrationTests {
                 + ",\"currency\":\"PLN\""
                 + ",\"reason\":\"" + reason + "\""
                 + ",\"failedAt\":\"2026-01-01T00:00:00Z\"}";
+    }
+
+    private static String correctedJson(String paymentId, String accountId, String amount) {
+        return "{\"paymentId\":\"" + paymentId + "\""
+                + ",\"accountId\":\"" + accountId + "\""
+                + ",\"amount\":" + amount
+                + ",\"currency\":\"PLN\""
+                + ",\"previousStatus\":\"FAILED\""
+                + ",\"newStatus\":\"COMPLETED\""
+                + ",\"correctedAt\":\"2026-01-01T00:00:00Z\"}";
     }
 
     private void send(String topic, String key, String payload) throws Exception {

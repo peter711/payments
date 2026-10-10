@@ -17,12 +17,66 @@ IDE (`localhost:9080`) and the infra-only compose file.
 | `50-send-mixed-outcomes-curl.sh` | Successes, declines and dead letters together |
 | `60-send-concurrent-duplicate-curl.sh` | The same `paymentId` fired concurrently |
 | `70-send-stripe-payment-curl.sh` | A payment charged by the real Stripe API (IDE + full stacks; `VERIFY=1` waits for the outcome on the full stack) |
+| `80-send-stripe-webhook-curl.sh` | A locally signed Stripe webhook posted to `payment-api` — reproduces the reconciliation flow with no Stripe account (see [Local Stripe webhooks](#local-stripe-webhooks)) |
 
 | Folder | Target |
 |---|---|
 | `scripts/curl/` | `localhost:8080` (plain curl) |
 | `scripts/curl-full/` | `http://localhost:18080` (`API_URL` overridable) |
 | `scripts/k8s/curl/` | `http://payments.localhost:8081` (`API_URL` overridable) |
+
+## Local Stripe webhooks
+
+`payment-api` exposes `POST /webhooks/stripe` when the Stripe provider is
+enabled on it. Stripe signs every delivery with a `whsec_...` secret; for local
+development you either forward real events with the Stripe CLI or sign a fake
+event yourself (below).
+
+```bash
+stripe listen --forward-to localhost:8080/webhooks/stripe
+export STRIPE_WEBHOOK_SECRET=whsec_...   # the value printed by `stripe listen`
+```
+
+An invalid signature is answered with `400`; an unsupported event or one with no
+`paymentId` metadata is acknowledged with `200` and published nowhere. The
+reconciliation then either finalizes a payment with no recorded outcome
+(`payments.completed`) or corrects a provisional failure into a
+`payment.corrected` event.
+
+No Stripe account is needed to reproduce this locally:
+`scripts/curl/80-send-stripe-webhook-curl.sh` (and the `scripts/curl-full/80-…`
+variant) signs the event with `openssl` — the same HMAC-SHA256 scheme Stripe
+uses — and posts it. The webhook host may use a different provider than the
+processor, so the API can serve webhooks while payments still go through the
+mock gateway.
+
+IDE run — enable the webhook on the API, leave the processor on mock:
+
+```bash
+(cd payment-api && PAYMENT_GATEWAY_PROVIDER=stripe STRIPE_API_KEY=sk_test_dummy \
+  STRIPE_WEBHOOK_SECRET=whsec_local ./mvnw spring-boot:run)
+
+STRIPE_WEBHOOK_SECRET=whsec_local \
+  scripts/curl/80-send-stripe-webhook-curl.sh pay-wh-1 payment_intent.succeeded
+```
+
+Full compose stack — set these in `.env`, then `docker compose -f docker-compose.full.yml up --build`:
+
+```
+PAYMENT_API_GATEWAY_PROVIDER=stripe   # expose /webhooks/stripe on payment-api only
+PAYMENT_GATEWAY_PROVIDER=mock         # keep the processor on the mock gateway
+STRIPE_API_KEY=sk_test_dummy
+STRIPE_WEBHOOK_SECRET=whsec_local
+```
+
+```bash
+VERIFY=1 STRIPE_WEBHOOK_SECRET=whsec_local \
+  scripts/curl-full/80-send-stripe-webhook-curl.sh pay-wh-1 payment_intent.succeeded
+```
+
+To see the correction path (`FAILED -> COMPLETED`), make the processor record a
+failure first, e.g. run it with
+`SPRING_APPLICATION_JSON='{"payment":{"mock":{"success-rate":0}}}'`.
 
 ## Kafka helpers — `scripts/kafka*`
 

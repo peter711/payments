@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softfal.com/contracts/payment.provider_event.v1.json",
+  "title": "PaymentProviderEvent",
+  "description": "Event published to payments.provider.events carrying a provider-reported payment status for reconciliation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["paymentId", "accountId", "amount", "currency", "providerStatus", "providerEventId", "reason", "occurredAt"],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "accountId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "amount": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "minLength": 1
+    },
+    "providerStatus": {
+      "type": "string",
+      "enum": ["SUCCEEDED", "FAILED", "CANCELED"],
+      "description": "The provider's reported payment status."
+    },
+    "providerEventId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The provider's own event id, kept for observability."
+    },
+    "reason": {
+      "type": ["string", "null"],
+      "description": "Failure reason when the provider supplied one; null otherwise."
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

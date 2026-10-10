@@ -86,6 +86,12 @@ spec:
                   name: stripe-credentials
                   key: api-key
                   optional: true
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-credentials
+                  key: webhook-secret
+                  optional: true
             # Emit ECS JSON logs so Alloy/Loki can index them.
             - name: LOGGING_STRUCTURED_FORMAT_CONSOLE
               value: ecs

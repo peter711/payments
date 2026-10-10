@@ -21,6 +21,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param timeoutMs         connect and read timeout for a Stripe call
  * @param maxNetworkRetries automatic SDK retries of a failed request (keep low;
  *                          Kafka already retries the record)
+ * @param webhookSecret     signing secret ({@code whsec_...}) used to
+ *                          authenticate inbound webhooks; required only when the
+ *                          webhook adapter is enabled
  */
 @ConfigurationProperties(prefix = "payment.stripe")
 public record StripeGatewayProperties(
@@ -28,7 +31,8 @@ public record StripeGatewayProperties(
         String apiBase,
         String paymentMethod,
         Integer timeoutMs,
-        Integer maxNetworkRetries
+        Integer maxNetworkRetries,
+        String webhookSecret
 ) {
 
     private static final String DEFAULT_API_BASE = "https://api.stripe.com";

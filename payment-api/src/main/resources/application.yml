@@ -14,6 +14,16 @@ spring:
         enable.idempotence: true
         spring.json.add.type.headers: false
 
+payment:
+  gateway:
+    # mock (default) keeps the local pipeline self-contained and hides the
+    # webhook endpoint; stripe exposes POST /webhooks/stripe and requires the
+    # signing secret below.
+    provider: ${PAYMENT_GATEWAY_PROVIDER:mock}
+  stripe:
+    api-key: ${STRIPE_API_KEY:}
+    webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+
 logging:
   level:
     root: INFO

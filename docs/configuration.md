@@ -23,6 +23,16 @@ All services import the shared defaults from `payments-observability.yml` via
 | `spring.kafka.bootstrap-servers` | `localhost:9092` | Overridden by `SPRING_KAFKA_BOOTSTRAP_SERVERS` |
 | `spring.kafka.producer.acks` | `all` | Strong ack before the event is considered sent |
 | `spring.kafka.producer.properties.enable.idempotence` | `true` | Broker-side producer idempotence |
+| `payment.gateway.provider` | `mock` | `mock` hides the webhook endpoint; `stripe` exposes `POST /webhooks/stripe` |
+| `payment.stripe.api-key` | *(none — required for `stripe`)* | Stripe secret key (`sk_test_...` in the sandbox) |
+| `payment.stripe.webhook-secret` | *(none — required for `stripe`)* | Signing secret (`whsec_...`) used to verify `Stripe-Signature`; startup fails when the provider is `stripe` without it |
+
+With `payment.gateway.provider=stripe`, `POST /webhooks/stripe` is registered and
+publishes a `payment.provider_event` for each supported payment-intent webhook.
+An invalid signature returns `400`; an unsupported event or one with no
+`paymentId` metadata returns `200` without publishing. See
+[operations.md](operations.md#local-stripe-webhooks) for the local `stripe
+listen` workflow.
 
 ### payment-processor — `application.yml`
 
@@ -72,6 +82,7 @@ All services import the shared defaults from `payments-observability.yml` via
 | `STRIPE_API_KEY` | *(none)* | compose / k8s | Stripe secret key; required when the provider is `stripe` |
 | `STRIPE_API_BASE` | `https://api.stripe.com` | — | Optional Stripe API base override |
 | `STRIPE_PAYMENT_METHOD` | `pm_card_visa` | — | Optional sandbox payment method |
+| `STRIPE_WEBHOOK_SECRET` | *(none)* | compose / k8s | Stripe webhook signing secret (`whsec_...`); required when the provider is `stripe` |
 | `DB_USERNAME` | `payments` | k8s | PostgreSQL user |
 | `DB_PASSWORD` | *(none — required)* | k8s | PostgreSQL password; a missing value fails fast |
 | `PAYMENTS_ENV` | `local` | k8s | The `env` metric tag (k8s sets `production`) |

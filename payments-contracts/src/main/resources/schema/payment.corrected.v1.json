@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softfal.com/contracts/payment.corrected.v1.json",
+  "title": "PaymentCorrected",
+  "description": "Event published to payments.corrected when a recorded failure is superseded by a provider-confirmed success.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["paymentId", "accountId", "amount", "currency", "previousStatus", "newStatus", "correctedAt"],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "accountId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "amount": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "minLength": 1
+    },
+    "previousStatus": {
+      "type": "string",
+      "enum": ["FAILED", "COMPLETED"]
+    },
+    "newStatus": {
+      "type": "string",
+      "enum": ["FAILED", "COMPLETED"]
+    },
+    "correctedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

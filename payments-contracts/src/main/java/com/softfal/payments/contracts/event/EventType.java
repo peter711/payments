@@ -21,7 +21,11 @@ public enum EventType {
     PAYMENT_COMPLETED(PaymentTopics.COMPLETED, "payment.completed", 1,
             PaymentCompleted.class, "payment.completed.v1.json"),
     PAYMENT_FAILED(PaymentTopics.FAILED, "payment.failed", 1,
-            PaymentFailed.class, "payment.failed.v1.json");
+            PaymentFailed.class, "payment.failed.v1.json"),
+    PAYMENT_PROVIDER_EVENT(PaymentTopics.PROVIDER_EVENTS, "payment.provider_event", 1,
+            PaymentProviderEvent.class, "payment.provider_event.v1.json"),
+    PAYMENT_CORRECTED(PaymentTopics.CORRECTED, "payment.corrected", 1,
+            PaymentCorrected.class, "payment.corrected.v1.json");
 
     private final String topic;
     private final String eventType;

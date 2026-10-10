@@ -1,6 +1,7 @@
 package com.softfal.payment_processor.config;
 
 import com.softfal.payment_processor.exception.InvalidPaymentException;
+import com.softfal.payment_processor.exception.InvalidProviderEventException;
 import com.softfal.payment_processor.metrics.PaymentProcessorMetrics;
 import com.softfal.payments.contracts.topic.PaymentTopics;
 import com.softfal.payments.gateway.InvalidGatewayRequestException;
@@ -52,7 +53,7 @@ public class KafkaErrorHandlingConfig {
 
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
                 templates,
-                (record, exception) -> new TopicPartition(DEAD_LETTER_TOPIC, record.partition()));
+                (record, exception) -> new TopicPartition(deadLetterTopicFor(record.topic()), record.partition()));
         recoverer.setLogRecoveryRecord(true);
 
         // Count every record handed to the DLT so the dead letter rate is visible
@@ -67,10 +68,24 @@ public class KafkaErrorHandlingConfig {
         // straight to the dead letter topic. A malformed/unauthorized gateway
         // request is equally permanent. Transient failures (e.g. gateway
         // timeouts) keep the default retryable behaviour.
-        errorHandler.addNotRetryableExceptions(InvalidPaymentException.class, InvalidGatewayRequestException.class);
+        errorHandler.addNotRetryableExceptions(
+                InvalidPaymentException.class,
+                InvalidGatewayRequestException.class,
+                InvalidProviderEventException.class);
         log.info("Configured DefaultErrorHandler with DeadLetterPublishingRecoverer publishing to '{}'",
                 DEAD_LETTER_TOPIC);
         return errorHandler;
+    }
+
+    /**
+     * Routes a dead-lettered record to the DLT of its source topic so a poisoned
+     * provider event never lands in the {@code payments.requested} dead letter
+     * topic (and vice versa).
+     */
+    static String deadLetterTopicFor(String sourceTopic) {
+        return PaymentTopics.PROVIDER_EVENTS.equals(sourceTopic)
+                ? PaymentTopics.PROVIDER_EVENTS_DEAD_LETTER
+                : DEAD_LETTER_TOPIC;
     }
 
     private KafkaTemplate<String, byte[]> rawRecordKafkaTemplate(KafkaProperties kafkaProperties) {

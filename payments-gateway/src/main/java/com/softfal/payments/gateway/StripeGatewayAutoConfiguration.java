@@ -2,6 +2,7 @@ package com.softfal.payments.gateway;
 
 import com.softfal.payments.gateway.stripe.StripeGatewayProperties;
 import com.softfal.payments.gateway.stripe.StripePaymentGateway;
+import com.softfal.payments.gateway.stripe.StripePaymentGatewayWebhook;
 import com.stripe.StripeClient;
 import com.stripe.model.PaymentIntent;
 import org.slf4j.Logger;
@@ -49,5 +50,22 @@ public class StripeGatewayAutoConfiguration {
     @ConditionalOnMissingBean
     PaymentGateway stripePaymentGateway(StripeClient stripeClient, StripeGatewayProperties properties) {
         return new StripePaymentGateway(stripeClient, properties);
+    }
+
+    /**
+     * The webhook adapter is enabled together with the provider and fails fast
+     * when the signing secret is missing, so a webhook can never be accepted
+     * without authentication.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    PaymentGatewayWebhook stripePaymentGatewayWebhook(StripeGatewayProperties properties) {
+        String webhookSecret = properties.webhookSecret();
+        if (webhookSecret == null || webhookSecret.isBlank()) {
+            throw new InvalidGatewayRequestException(
+                    "payment.gateway.provider=stripe requires payment.stripe.webhook-secret (STRIPE_WEBHOOK_SECRET)");
+        }
+        log.info("Configuring the Stripe webhook adapter");
+        return new StripePaymentGatewayWebhook(properties);
     }
 }
