@@ -52,6 +52,8 @@ scripts/k8s/40-smoke.sh      # send two payments through the ingress
 scripts/k8s/50-failover.sh   # kill a replica, assert no double charge
 scripts/k8s/70-metrics-demo.sh  # drive traffic for the dashboards
 scripts/k8s/80-logs-demo.sh     # drive traffic for the log dashboard
+scripts/k8s/60-alerts-demo.sh   # fire DeadLetterMessages and assert delivery
+scripts/k8s/61-alert-service-down.sh  # fire ServiceDown + check inhibition
 scripts/k8s/90-teardown.sh   # delete the cluster
 ```
 
@@ -103,6 +105,100 @@ Open Grafana → Explore → **Loki** (or the **Payments Logs** dashboard) and r
 
 Tunables: `ROUNDS`, `BATCH`, `PARALLEL`, `SLEEP_BETWEEN`.
 
+## Alerts and demo scenarios
+
+Prometheus evaluates the rules in `observability/prometheus/rules/payments-alerts.yml`
+and forwards firing alerts to **Alertmanager**, which owns routing, grouping,
+inhibition and delivery. The local sink is **Mailpit**, so every alert is visible
+as a mail without any external service:
+
+| Where | What |
+|---|---|
+| Prometheus `/alerts` | raw rule state (`pending` / `firing`) |
+| Alertmanager (`:9093`, k3d `alertmanager.localhost:8081`) | grouped alerts, silences, inhibition |
+| Mailpit (`:8025`, k3d `mailpit.localhost:8081`) | the delivered (and resolved) alert mails |
+| Grafana → Alerting | the same alerts through the provisioned Alertmanager datasource |
+
+Two scripts drive a real signal and assert the alert travelled end to end:
+
+```bash
+scripts/k8s/60-alerts-demo.sh          # negative-amount payment -> DLT -> DeadLetterMessages
+scripts/k8s/61-alert-service-down.sh   # one failing scrape target -> ServiceDown
+```
+
+`60` sends payments the processor rejects permanently, so they are dead-lettered
+and `DeadLetterMessages` fires after its 1m window. `61` patches one pod's
+`prometheus.io/port` annotation to a closed port — the pod stays Running but the
+scrape fails, so `up == 0` and `ServiceDown` fires; the annotation is restored by
+a trap. Both print the Prometheus/Alertmanager/Mailpit URLs. Tunables: `API_URL`,
+`NAMESPACE`, `ALERT`, `PAYMENTS`, `TIMEOUT`, `PROM_PORT`, `AM_PORT` (60) and
+`TARGET`, `BAD_PORT`, `TIMEOUT`, `PROM_PORT` (61).
+
+### Alert runbooks
+
+Each rule links here through its `runbook_url`. Severity: `critical` pages,
+`warning` is next-business-day, `info` is for the dashboards.
+
+#### ServiceDown
+`up == 0` for 1m. The pod is discovered but cannot be scraped. Check
+`kubectl -n payments get pods`, the pod's readiness and
+`kubectl -n payments logs <pod>`. Mutes the other alerts for the same `app`
+(inhibition).
+
+#### HighHttpErrorRate
+More than 5% of HTTP requests return 5xx for 5m. Look at the failing endpoint
+and the service logs; a downstream (Kafka, Postgres, gateway) is usually the
+cause.
+
+#### HighHttpLatency
+p95 latency above 1s for 10m. Check the gateway latency panel and JVM/GC.
+
+#### OutboxBacklogGrowing
+More than 100 pending outbox rows for 10m. The relay is slower than the
+producers or blocked. Check `payment-processor` logs and the Kafka publish rate.
+
+#### OutboxStalled
+Pending outbox rows but nothing published for 5m — the relay is stuck. Restart a
+`payment-processor` replica and confirm the outbox drains.
+
+#### OutboxPublishFailures
+A publish attempt failed in the last 10m. Usually a Kafka broker/network blip;
+the relay retries with backoff, so watch it clear. Persisting failures point at
+Kafka availability.
+
+#### DeadLetterMessages
+At least one record dead-lettered in the last 10m. Inspect
+`payments.requested.DLT` (`scripts/kafka*/40-kafka-dlt-consumer-start.sh`). A
+single invalid payment is expected; a stream means a producer or schema change.
+
+#### KafkaConsumerLagHigh
+Consumer lag above 1000 for 10m. Scale `payment-processor` / `notification-service`
+or check that the consumers are healthy.
+
+#### PaymentProcessingFailureRateHigh
+More than 50% of processed payments failed for 10m. Look at the outcome `reason`
+in the logs and the mock-gateway behaviour.
+
+#### GatewayLatencyHigh
+p95 gateway call above 2s for 10m. The gateway is slow; check
+`payment.mock.delay-ms` and the gateway latency panel.
+
+#### PaymentEventPublishErrors
+The API accepted payments but could not publish their events (last 10m). Check
+Kafka connectivity from `payment-api`.
+
+#### NotificationSendFailures
+A notification failed to send in the last 10m. Check `notification-service` logs
+and the sender.
+
+#### DuplicateSpike
+More than 50 duplicate payments skipped for 10m. Usually a consumer rebalance
+loop or a redelivery storm; check consumer group membership and lag.
+
+#### HighJvmHeapUsage
+Heap above 85% for 10m. Check for a leak or lower `MaxRAMPercentage` / raise the
+container memory limit.
+
 ## Troubleshooting
 
 | Symptom | Likely cause / fix |
@@ -114,3 +210,5 @@ Tunables: `ROUNDS`, `BATCH`, `PARALLEL`, `SLEEP_BETWEEN`.
 | Kafka UI empty on k3d | Wait for `kafka-init` to complete; `scripts/k8s/20-deploy.sh` already waits for it. |
 | Grafana Loki datasource empty | The apps must emit ECS JSON (`LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`) and send traffic. On the IDE stack logs stay on the console; use the full compose stack or k3d. Check Alloy: `kubectl -n payments logs ds/alloy`. |
 | Port already in use | Change the host port in the relevant compose file or the k3d ports in `scripts/k8s/00-up.sh`. |
+| No alert emails in Mailpit | Alertmanager must reach Mailpit (`mailpit:1025`) and Prometheus must reach Alertmanager (`alertmanager:9093`). Check `kubectl -n payments logs deploy/alertmanager` and Prometheus → Status → Alertmanagers (must be `UP`). |
+| Alert stuck in `pending` | The rule's `for:` window has not elapsed yet — this is expected (e.g. `OutboxBacklogGrowing` waits 10m). |

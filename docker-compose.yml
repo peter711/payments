@@ -8,6 +8,8 @@
 #   - Prometheus: http://localhost:9090
 #   - Grafana   : http://localhost:3000  (anonymous admin; admin login from .env)
 #   - Loki      : http://localhost:3100  (Grafana "Loki" datasource)
+#   - Alertmanager: http://localhost:9093 (firing alerts, silences, inhibition)
+#   - Mailpit   : http://localhost:8025  (alert emails land here)
 #
 # The services are expected on the host at the ports set in .run/ (9080/9081/
 # 9082); Prometheus scrapes them via host.docker.internal. This file only brings
@@ -80,6 +82,30 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
+  # Routes the Prometheus rules' firing alerts, groups and de-duplicates them and
+  # delivers to the Mailpit SMTP sink below.
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    restart: unless-stopped
+
+  # Local email sink: Alertmanager sends alert mails over SMTP, the web UI at
+  # :8025 shows the inbox. No external mail service needed.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:13.0.10
     container_name: grafana
@@ -97,6 +123,7 @@ services:
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
+      - alertmanager
       - loki
     restart: unless-stopped
 

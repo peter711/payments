@@ -24,11 +24,12 @@
           "uid": "prometheus"
         },
         "query": {
-          "query": "label_values(up, application)",
+          "query": "label_values(jvm_memory_used_bytes, application)",
           "refId": "A"
         },
         "includeAll": true,
         "multi": true,
+        "allValue": ".*",
         "refresh": 2
       }
     ]

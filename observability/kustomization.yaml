@@ -17,6 +17,10 @@ configMapGenerator:
   - name: prometheus-rules
     files:
       - prometheus/rules/payments-alerts.yml
+  # Alert routing/grouping/inhibition and the local Mailpit receiver.
+  - name: alertmanager-config
+    files:
+      - alertmanager/alertmanager.yml
   # Log aggregation: Loki storage/query config and the Alloy collection pipeline.
   - name: loki-config
     files:
@@ -28,6 +32,7 @@ configMapGenerator:
     files:
       - grafana/provisioning/datasources/prometheus.yml
       - grafana/provisioning/datasources/loki.yml
+      - grafana/provisioning/datasources/alertmanager.yml
   - name: grafana-dashboards-provider
     files:
       - grafana/provisioning/dashboards/dashboards.yml

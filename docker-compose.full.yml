@@ -13,6 +13,8 @@
 #   - Prometheus : http://localhost:19090
 #   - Grafana : http://localhost:13000  (anonymous admin; admin login from .env)
 #   - Loki : http://localhost:13100  (Grafana "Loki" datasource; logs via Alloy)
+#   - Alertmanager : http://localhost:19093  (firing alerts, silences, inhibition)
+#   - Mailpit : http://localhost:18025  (alert emails land here)
 #   - Kafka (host listener) : localhost:29092
 #
 # Service-to-service traffic uses the INTERNAL listener (kafka:19092); the HOST
@@ -84,6 +86,30 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  # Routes the Prometheus rules' firing alerts, groups and de-duplicates them and
+  # delivers to the Mailpit SMTP sink below.
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    ports:
+      - "19093:9093"
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # Local email sink: Alertmanager sends alert mails over SMTP, the web UI shows
+  # the inbox. No external mail service needed.
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "18025:8025"
+      - "11025:1025"
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:13.0.10
     ports:
@@ -100,6 +126,7 @@ services:
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
+      - alertmanager
       - loki
     restart: unless-stopped
 

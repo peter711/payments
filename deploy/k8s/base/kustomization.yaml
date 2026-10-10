@@ -23,6 +23,14 @@ resources:
   - monitoring/prometheus/rbac.yaml
   - monitoring/prometheus/deployment.yaml
   - monitoring/prometheus/service.yaml
+  # Alert delivery: Alertmanager (routing/grouping/inhibition) plus Mailpit as
+  # the local SMTP sink that Alertmanager sends to.
+  - monitoring/alertmanager/deployment.yaml
+  - monitoring/alertmanager/service.yaml
+  - monitoring/alertmanager/ingress.yaml
+  - monitoring/mailpit/deployment.yaml
+  - monitoring/mailpit/service.yaml
+  - monitoring/mailpit/ingress.yaml
   - monitoring/grafana/deployment.yaml
   - monitoring/grafana/service.yaml
   - monitoring/grafana/ingress.yaml

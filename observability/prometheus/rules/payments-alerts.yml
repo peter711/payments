@@ -1,8 +1,14 @@
 # Alerting rules for the payments system.
 #
-# SLIs follow RED (Rate/Errors/Duration) for the services plus the two async
-# signals that matter most for this pipeline: the outbox backlog and the Kafka
-# consumer lag. Tags stay low-cardinality (no payment/account ids).
+# SLIs follow RED (Rate/Errors/Duration) for the services plus the async signals
+# that matter most for this pipeline: the outbox backlog, the dead letter queue,
+# the Kafka consumer lag and the business outcomes. Tags stay low-cardinality
+# (no payment/account ids); identifiers belong in logs.
+#
+# Prometheus evaluates these rules and forwards firing alerts to Alertmanager
+# (see observability/alertmanager/alertmanager.yml), which owns routing,
+# grouping, inhibition and delivery. Each alert carries a runbook_url that points
+# at the "Alert runbooks" section of docs/operations.md.
 groups:
   - name: payments-availability
     rules:
@@ -14,6 +20,7 @@ groups:
         annotations:
           summary: "Target {{ $labels.job }} is down"
           description: "Prometheus cannot scrape {{ $labels.job }} ({{ $labels.instance }})."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#servicedown"
 
       - alert: HighHttpErrorRate
         expr: |
@@ -26,6 +33,7 @@ groups:
         annotations:
           summary: "High 5xx rate on {{ $labels.application }}"
           description: "More than 5% of requests have failed with a 5xx for 5 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#highhttperrorrate"
 
       - alert: HighHttpLatency
         expr: |
@@ -37,6 +45,7 @@ groups:
         annotations:
           summary: "High p95 latency on {{ $labels.application }}"
           description: "p95 request latency has been above 1s for 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#highhttplatency"
 
   - name: payments-pipeline
     rules:
@@ -48,6 +57,22 @@ groups:
         annotations:
           summary: "Outbox backlog on {{ $labels.application }}"
           description: "More than 100 outbox events have been waiting to be published for 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#outboxbackloggrowing"
+
+      # Complements OutboxBacklogGrowing for the case where the relay is stuck
+      # below the backlog threshold: rows are waiting but nothing is published.
+      - alert: OutboxStalled
+        expr: |
+          max by (application) (payments_processor_outbox_pending) > 0
+            and
+          sum by (application) (rate(payments_processor_outbox_published_total[5m])) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Outbox relay stalled on {{ $labels.application }}"
+          description: "There are pending outbox events but nothing has been published for 5 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#outboxstalled"
 
       - alert: OutboxPublishFailures
         expr: increase(payments_processor_outbox_publish_failures_total[10m]) > 0
@@ -57,6 +82,7 @@ groups:
         annotations:
           summary: "Outbox publish failures on {{ $labels.application }}"
           description: "The outbox relay failed to publish an event in the last 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#outboxpublishfailures"
 
       - alert: DeadLetterMessages
         expr: increase(payments_processor_dlq_total[10m]) > 0
@@ -66,6 +92,7 @@ groups:
         annotations:
           summary: "Messages routed to the DLT"
           description: "At least one record was dead-lettered in the last 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#deadlettermessages"
 
       - alert: KafkaConsumerLagHigh
         expr: max by (application) (kafka_consumer_fetch_manager_records_lag_max) > 1000
@@ -75,6 +102,66 @@ groups:
         annotations:
           summary: "Kafka consumer lag on {{ $labels.application }}"
           description: "Consumer lag has exceeded 1000 records for 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#kafkaconsumerlaghigh"
+
+  - name: payments-business
+    rules:
+      - alert: PaymentProcessingFailureRateHigh
+        expr: |
+          sum by (application) (rate(payments_processor_outcomes_total{result="failure"}[5m]))
+            /
+          clamp_min(sum by (application) (rate(payments_processor_outcomes_total[5m])), 0.001) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High payment failure rate on {{ $labels.application }}"
+          description: "More than 50% of processed payments have failed for 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#paymentprocessingfailureratehigh"
+
+      - alert: GatewayLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, application) (rate(payments_processor_gateway_duration_seconds_bucket[5m]))) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow payment gateway on {{ $labels.application }}"
+          description: "p95 gateway call latency has been above 2s for 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#gatewaylatencyhigh"
+
+      - alert: PaymentEventPublishErrors
+        expr: increase(payments_api_publish_errors_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Payment events failed to publish on {{ $labels.application }}"
+          description: "The API accepted payments but could not publish their events to Kafka in the last 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#paymenteventpublisherrors"
+
+      - alert: NotificationSendFailures
+        expr: increase(notifications_sent_total{result="failure"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Notification send failures on {{ $labels.application }}"
+          description: "At least one notification failed to send in the last 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#notificationsendfailures"
+
+      # A spike in duplicates usually means a consumer rebalance loop or a
+      # redelivery storm rather than genuine user behaviour.
+      - alert: DuplicateSpike
+        expr: increase(payments_processor_duplicates_total[10m]) > 50
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "Duplicate payments spike on {{ $labels.application }}"
+          description: "More than 50 duplicate payments were skipped in the last 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#duplicatespike"
 
   - name: payments-runtime
     rules:
@@ -89,3 +176,4 @@ groups:
         annotations:
           summary: "High JVM heap usage on {{ $labels.application }}"
           description: "Heap usage has been above 85% for 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#highjvmheapusage"

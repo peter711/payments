@@ -18,6 +18,8 @@ Reproduces `docker-compose.full.yml` as a local Kubernetes deployment, with
 | notification-service | Deployment + Service | **2** | shared Postgres, dedup |
 | Loki | StatefulSet + Service `loki` | 1 | log storage, 7-day retention, 2Gi PVC |
 | Alloy | DaemonSet | per node | tails container logs → Loki |
+| Alertmanager | Deployment + Service + Ingress | 1 | routes/groups/inhibits the Prometheus alerts |
+| Mailpit | Deployment + Service + Ingress | 1 | SMTP sink; shows the alert mails |
 
 ## Two replicas, always
 
@@ -81,6 +83,8 @@ scripts/k8s/40-smoke.sh     # send a couple of payments via the ingress
 scripts/k8s/50-failover.sh  # kill a processor replica; assert no double charge
 scripts/k8s/70-metrics-demo.sh  # drive traffic for the metric dashboards
 scripts/k8s/80-logs-demo.sh     # drive traffic for the log dashboard
+scripts/k8s/60-alerts-demo.sh   # fire DeadLetterMessages end to end
+scripts/k8s/61-alert-service-down.sh  # fire ServiceDown + inhibition
 scripts/k8s/90-teardown.sh  # delete the cluster
 ```
 
@@ -147,11 +151,30 @@ Loki has no ingress; query it through Grafana
 kubectl -n payments port-forward svc/loki 3100:3100
 ```
 
+## Alerting
+
+Prometheus evaluates the rules in `observability/prometheus/rules/payments-alerts.yml`
+and forwards firing alerts to the **Alertmanager** Deployment, which groups,
+inhibits and routes them to the **Mailpit** SMTP sink. Both are provisioned from
+`observability/` (single source of truth with the compose stacks).
+
+```bash
+scripts/k8s/60-alerts-demo.sh          # DLT payment -> DeadLetterMessages fires
+scripts/k8s/61-alert-service-down.sh   # break one scrape target -> ServiceDown
+```
+
+Both scripts port-forward Prometheus/Alertmanager, drive a real signal, wait for
+the rule's `for` window and assert the alert reached Alertmanager. Browse the
+results at http://alertmanager.localhost:8081 and the inbox at
+http://mailpit.localhost:8081. Silences are created in the Alertmanager UI.
+
 ## Endpoints
 
 * `payment-api` — http://payments.localhost:8081/payments
 * Kafka UI — http://kafka-ui.localhost:8081
 * Grafana (metrics + logs) — http://grafana.localhost:8081
+* Alertmanager (firing alerts, silences) — http://alertmanager.localhost:8081
+* Mailpit (alert inbox) — http://mailpit.localhost:8081
 
 `*.localhost` resolves to `127.0.0.1` on macOS, so no `/etc/hosts` edits are
 needed. If the ingress is not reachable, fall back to port-forwarding:

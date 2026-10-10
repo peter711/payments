@@ -9,8 +9,16 @@ Observation API so they can be added later without touching the call sites.
 
 ```
 service  --(Micrometer meters)-->  /actuator/prometheus  <--scrape--  Prometheus  -->  Grafana
+                                                                          |
+                                                                          v  (firing rules)
+                                                                    Alertmanager  -->  Mailpit (mail)
 service  --(ECS JSON on stdout)--> Alloy  -->  Loki  ---------------------------------->  Grafana
 ```
+
+Prometheus evaluates the alerting rules and hands firing alerts to
+**Alertmanager** (routing, grouping, inhibition, silences), which delivers them
+to a local **Mailpit** SMTP sink. Grafana reads both Prometheus and Alertmanager
+through provisioned datasources.
 
 ## The `payments-observability` module
 
@@ -54,6 +62,8 @@ Prometheus scrapes them through `host.docker.internal`.
 |---|---|
 | Grafana | http://localhost:3000 (anonymous admin; admin login from `.env`) |
 | Prometheus | http://localhost:9090 |
+| Alertmanager | http://localhost:9093 |
+| Mailpit (alert inbox) | http://localhost:8025 |
 | Loki | http://localhost:3100 |
 | Kafka UI | http://localhost:8090 |
 
@@ -67,6 +77,8 @@ docker compose -f docker-compose.full.yml up --build
 |---|---|
 | Grafana | http://localhost:13000 |
 | Prometheus | http://localhost:19090 |
+| Alertmanager | http://localhost:19093 |
+| Mailpit (alert inbox) | http://localhost:18025 |
 | Loki | http://localhost:13100 |
 | payment-api | http://localhost:18080 |
 | Kafka UI | http://localhost:18090 |
@@ -79,9 +91,12 @@ into ConfigMaps (single source of truth for compose and k8s):
 - `prometheus.k8s.yml` — pod discovery via `kubernetes_sd_configs`; only pods
   annotated with `prometheus.io/scrape="true"` are scraped.
 - `prometheus/rules/payments-alerts.yml` — alerting rules.
+- `alertmanager/alertmanager.yml` — routing, grouping, inhibition and the
+  Mailpit receiver.
 - `loki/loki-config.yml` — Loki storage/query configuration.
 - `alloy/config.k8s.alloy` — the log collection pipeline.
-- `grafana/...` — datasources and dashboards, provisioned as code.
+- `grafana/...` — datasources (Prometheus, Loki, Alertmanager) and dashboards,
+  provisioned as code.
 
 ```bash
 scripts/k8s/00-up.sh && scripts/k8s/10-images.sh && scripts/k8s/20-deploy.sh
@@ -103,6 +118,49 @@ API_URL=http://localhost:18080 scripts/k8s/70-metrics-demo.sh   # full compose s
 
 Tunables: `ROUNDS`, `BATCH`, `PARALLEL`, `BURST`, `SLEEP_BETWEEN`. The script
 prints a summary and ready-to-use PromQL queries at the end.
+
+## Alerts
+
+Alerting is split into **detection** (Prometheus rules) and **delivery**
+(Alertmanager), both configured as code:
+
+- `prometheus/rules/payments-alerts.yml` — the rules. They cover RED
+  (availability / errors / latency), the async pipeline (outbox backlog and
+  stall, publish failures, dead letters, consumer lag) and the business
+  outcomes (failure rate, gateway latency, publish errors, notification
+  failures, duplicate spikes). Every alert carries a `severity` and a
+  `runbook_url` pointing at `docs/operations.md`.
+- `alertmanager/alertmanager.yml` — routing by severity, `group_by`
+  `[alertname, application]` so a burst collapses into one mail, and
+  **inhibition rules**: a `ServiceDown` mutes the other alerts for the same
+  `app`, and consumer lag mutes the pipeline alerts it explains.
+
+Firing alerts are visible in three places: Prometheus → **Alerts** (the raw
+state plus the rule), **Alertmanager** (`http://localhost:9093`, grouping and
+silences) and Grafana (the provisioned **Alertmanager** datasource). The demo
+stacks deliver to **Mailpit**, an SMTP sink with a web inbox, so an alert can be
+followed end to end without any external service:
+
+```bash
+# k3d
+scripts/k8s/60-alerts-demo.sh        # a DLT payment -> DeadLetterMessages fires
+scripts/k8s/61-alert-service-down.sh # break one scrape target -> ServiceDown fires
+```
+
+Both scripts drive a real signal, wait for the rule to fire and assert the
+notification reached Alertmanager.
+
+### Adding an alert
+
+1. Add a rule to `prometheus/rules/payments-alerts.yml` with a bounded set of
+   labels (never `paymentId`/`accountId`), a `severity`, and a `runbook_url`.
+2. Add the matching anchor under **Alert runbooks** in `docs/operations.md`.
+3. If the alert needs its own routing or a different receiver, extend
+   `alertmanager/alertmanager.yml`.
+
+Because the rule file is mounted into Prometheus (compose) and generated as the
+`prometheus-rules` ConfigMap (k8s), a `docker compose restart prometheus` or a
+rollout is all that is needed — no UI clicking.
 
 ## Logs
 

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  labels:
+    app: mailpit
+spec:
+  selector:
+    app: mailpit
+  ports:
+    - name: http
+      port: 8025
+      targetPort: http
+    # SMTP sink Alertmanager delivers the alert mails to.
+    - name: smtp
+      port: 1025
+      targetPort: smtp

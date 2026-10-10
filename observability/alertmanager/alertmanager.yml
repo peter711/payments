@@ -1,0 +1,54 @@
+# Alertmanager configuration for the payments demo stacks.
+#
+# Prometheus evaluates the rules in prometheus/rules/payments-alerts.yml and
+# forwards firing alerts here; Alertmanager owns the routing, grouping,
+# inhibition and delivery. Like the rest of observability/, this file is the
+# single source of truth: docker-compose mounts it directly and Kubernetes turns
+# it into the `alertmanager-config` ConfigMap (see observability/kustomization.yaml).
+#
+# The local receiver is Mailpit, an SMTP sink with a web UI, so an alert can be
+# followed end to end without any external service. In a real deployment swap
+# the receiver for Slack / PagerDuty / a webhook.
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: mailpit
+  # One notification per alert name + service, so a burst of related alerts does
+  # not fan out into dozens of mails.
+  group_by: [alertname, application]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - severity = "critical"
+      receiver: mailpit
+      # Critical alerts re-notify sooner than warnings.
+      repeat_interval: 1h
+
+# Inhibition: one root cause should not page for every downstream symptom.
+inhibit_rules:
+  # A down target makes every other alert for that service noise. The `up`
+  # metric carries the scrape-level `app` label (see the Prometheus relabel
+  # configs), which every metric from the same pod also has, so `app` links the
+  # two sides.
+  - source_matchers: [alertname = "ServiceDown"]
+    target_matchers: [severity =~ "warning|critical"]
+    equal: [app]
+  # Consumer lag explains (and should mute) the pipeline alerts that follow it.
+  - source_matchers: [alertname = "KafkaConsumerLagHigh"]
+    target_matchers: [alertname =~ "DeadLetterMessages|Outbox.*|Payment.*Failure.*"]
+    equal: [application]
+
+receivers:
+  - name: mailpit
+    email_configs:
+      - to: oncall@payments.local
+        from: alertmanager@payments.local
+        # "mailpit" is the service/container name in both stacks and in k8s.
+        smarthost: mailpit:1025
+        require_tls: false
+        # Send a follow-up when the alert clears, so the inbox tells the whole
+        # story (firing -> resolved).
+        send_resolved: true

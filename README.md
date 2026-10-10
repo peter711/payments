@@ -23,7 +23,7 @@ consumer inbox, a gateway idempotency ledger and a transactional outbox.
   deployment (kustomize).
 - **Observability as code** — Micrometer → Actuator → Prometheus for metrics and
   ECS JSON logs → Alloy → Loki, both visualized in one Grafana, with dashboards
-  and alerts provisioned as code.
+  and alert rules provisioned as code and delivered through Alertmanager.
 
 ## Architecture
 
