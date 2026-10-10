@@ -1,0 +1,108 @@
+// Grafana Alloy log pipeline for the payments Kubernetes stack.
+//
+// Alloy discovers the pods in the payments namespace, reads their container
+// logs through the Kubernetes API and forwards them to Loki. The Spring Boot
+// ECS JSON line is parsed so the level becomes a label while the
+// high-cardinality correlation fields travel as Loki structured metadata: they
+// stay queryable (`| correlation_id="..."`) without exploding the index.
+//
+// Mounted at /etc/alloy/config.alloy by the DaemonSet; the compose stack uses
+// config.compose.alloy instead.
+
+// Discover every pod; the relabel step keeps only the payments namespace.
+// Because Alloy runs as a DaemonSet, each instance only reads the pods on its
+// own node, so a pod's logs are ingested exactly once.
+discovery.kubernetes "pods" {
+	role = "pod"
+
+	selectors {
+		role  = "pod"
+		field = "spec.nodeName=" + coalesce(sys.env("HOSTNAME"), constants.hostname)
+	}
+}
+
+discovery.relabel "pods" {
+	targets = discovery.kubernetes.pods.targets
+
+	rule {
+		source_labels = ["__meta_kubernetes_namespace"]
+		regex         = "payments"
+		action        = "keep"
+	}
+
+	// Bounded, useful labels. `app` comes from the pod label set by the k8s
+	// deployments and matches the `application` metric tag, so metrics and logs
+	// line up in Grafana.
+	rule {
+		source_labels = ["__meta_kubernetes_namespace"]
+		target_label  = "namespace"
+	}
+	rule {
+		source_labels = ["__meta_kubernetes_pod_label_app"]
+		target_label  = "app"
+	}
+	rule {
+		source_labels = ["__meta_kubernetes_pod_name"]
+		target_label  = "pod"
+	}
+	rule {
+		source_labels = ["__meta_kubernetes_pod_container_name"]
+		target_label  = "container"
+	}
+}
+
+loki.source.kubernetes "pods" {
+	targets    = discovery.relabel.pods.output
+	forward_to = [loki.process.payments.receiver]
+}
+
+loki.process "payments" {
+	// Parse the ECS JSON emitted by Spring Boot (logging.structured.format.console=ecs).
+	stage.json {
+		expressions = {
+			level          = "log.level",
+			correlation_id = "correlation_id",
+			causation_id   = "causation_id",
+			event_id       = "event_id",
+			event_type     = "event_type",
+			payment_id     = "payment_id",
+			account_id     = "account_id",
+			topic          = "topic",
+		}
+	}
+
+	// ECS surfaces the level uppercased (INFO, ERROR, ...); normalise it so
+	// queries can use lowercase.
+	stage.template {
+		source   = "level"
+		template = "{{ ToLower .Value }}"
+	}
+
+	// Low-cardinality field -> label.
+	stage.labels {
+		values = {
+			level = "",
+		}
+	}
+
+	// High-cardinality correlation fields -> structured metadata.
+	stage.structured_metadata {
+		values = {
+			correlation_id = "",
+			causation_id   = "",
+			event_id       = "",
+			event_type     = "",
+			payment_id     = "",
+			account_id     = "",
+			topic          = "",
+		}
+	}
+
+	forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}

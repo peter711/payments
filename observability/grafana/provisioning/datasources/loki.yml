@@ -1,0 +1,15 @@
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    # "loki" is the service/container name in both compose stacks and in
+    # Kubernetes, so the same provisioning works everywhere.
+    url: http://loki:3100
+    isDefault: false
+    editable: false
+    jsonData:
+      # Keep enough context around a hit to read a whole payment flow.
+      maxLines: 1000

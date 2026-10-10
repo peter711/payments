@@ -1,0 +1,28 @@
+# Alloy discovers pods and reads their logs through the Kubernetes API, so it
+# needs read access to pods, their logs and namespaces. Mirrors the RBAC the
+# Prometheus deployment already uses for target discovery.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: payments-alloy
+  labels:
+    app: alloy
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: payments-alloy
+  labels:
+    app: alloy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: payments-alloy
+subjects:
+  - kind: ServiceAccount
+    name: alloy
+    namespace: payments

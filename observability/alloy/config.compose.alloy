@@ -1,0 +1,88 @@
+// Grafana Alloy log pipeline for the full docker-compose stack.
+//
+// Alloy tails the logs of the three application containers and forwards them to
+// Loki. The Spring Boot ECS JSON line is parsed so the level becomes a label
+// while the high-cardinality correlation fields travel as Loki structured
+// metadata (queryable, but never indexed as labels).
+//
+// In the IDE stack (docker-compose.yml) the services run on the host, not as
+// containers, so Alloy finds no matching container and collects nothing - that
+// is expected; use the full stack for centralized logs.
+//
+// Mounted at /etc/alloy/config.alloy by the compose `alloy` service.
+
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	// Keep only the three application containers. Compose names them
+	// `<project>-<service>-<index>`, e.g. `payments-full-payment-api-1`.
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/.*(payment-api|payment-processor|notification-service).*"
+		action        = "keep"
+	}
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/.*(payment-api|payment-processor|notification-service).*"
+		target_label  = "app"
+		replacement   = "$1"
+	}
+}
+
+loki.source.docker "containers" {
+	host       = "unix:///var/run/docker.sock"
+	targets    = discovery.relabel.containers.output
+	forward_to = [loki.process.payments.receiver]
+}
+
+loki.process "payments" {
+	stage.json {
+		expressions = {
+			level          = "log.level",
+			correlation_id = "correlation_id",
+			causation_id   = "causation_id",
+			event_id       = "event_id",
+			event_type     = "event_type",
+			payment_id     = "payment_id",
+			account_id     = "account_id",
+			topic          = "topic",
+		}
+	}
+
+	// ECS surfaces the level uppercased (INFO, ERROR, ...); normalise it so
+	// queries can use lowercase.
+	stage.template {
+		source   = "level"
+		template = "{{ ToLower .Value }}"
+	}
+
+	stage.labels {
+		values = {
+			level = "",
+		}
+	}
+
+	stage.structured_metadata {
+		values = {
+			correlation_id = "",
+			causation_id   = "",
+			event_id       = "",
+			event_type     = "",
+			payment_id     = "",
+			account_id     = "",
+			topic          = "",
+		}
+	}
+
+	forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}
