@@ -26,6 +26,12 @@ route:
       receiver: mailpit
       # Critical alerts re-notify sooner than warnings.
       repeat_interval: 1h
+    # Dead man's switch: delivered on a long cadence so a missing Watchdog mail
+    # is itself the signal that the pipeline is down.
+    - matchers:
+        - alertname = "Watchdog"
+      receiver: mailpit
+      repeat_interval: 24h
 
 # Inhibition: one root cause should not page for every downstream symptom.
 inhibit_rules:

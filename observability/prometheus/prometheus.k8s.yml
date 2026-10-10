@@ -54,3 +54,13 @@ scrape_configs:
         target_label: namespace
       - source_labels: [__meta_kubernetes_pod_name]
         target_label: pod
+
+  # Self-monitoring: Prometheus scrapes its own metrics and Alertmanager's, so
+  # the meta-alerts (Watchdog, notification failures, rule eval time) have data.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]

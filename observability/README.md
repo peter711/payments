@@ -124,16 +124,26 @@ prints a summary and ready-to-use PromQL queries at the end.
 Alerting is split into **detection** (Prometheus rules) and **delivery**
 (Alertmanager), both configured as code:
 
-- `prometheus/rules/payments-alerts.yml` — the rules. They cover RED
-  (availability / errors / latency), the async pipeline (outbox backlog and
-  stall, publish failures, dead letters, consumer lag) and the business
+- `prometheus/rules/payments-alerts.yml` — the rules, grouped as
+  `payments-availability`, `payments-pipeline`, `payments-business`,
+  `payments-runtime`, `payments-database`, `payments-kafka` and `payments-meta`.
+  They cover RED (availability / errors / latency), the async pipeline (outbox
+  backlog and stall, publish failures, dead letters, consumer lag), the business
   outcomes (failure rate, gateway latency, publish errors, notification
-  failures, duplicate spikes). Every alert carries a `severity` and a
-  `runbook_url` pointing at `docs/operations.md`.
+  failures, duplicate spikes), the database (HikariCP pool exhaustion / timeouts
+  / saturation), the JVM and process (GC overhead, GC pauses, CPU, file
+  descriptors), client-side Kafka health (rebalance storms, throttling,
+  disconnects, auth) and the alerting pipeline itself (`Watchdog`, notification
+  failures, slow rule evaluation, config reload failures). Every alert carries a
+  `severity` and a `runbook_url` pointing at `docs/operations.md`.
 - `alertmanager/alertmanager.yml` — routing by severity, `group_by`
   `[alertname, application]` so a burst collapses into one mail, and
   **inhibition rules**: a `ServiceDown` mutes the other alerts for the same
   `app`, and consumer lag mutes the pipeline alerts it explains.
+
+Prometheus also scrapes its own `/metrics` and Alertmanager's, so the
+meta-alerts have data — a failing rule evaluation or a broken notification path
+is itself visible.
 
 Firing alerts are visible in three places: Prometheus → **Alerts** (the raw
 state plus the rule), **Alertmanager** (`http://localhost:9093`, grouping and
@@ -143,12 +153,15 @@ followed end to end without any external service:
 
 ```bash
 # k3d
-scripts/k8s/60-alerts-demo.sh        # a DLT payment -> DeadLetterMessages fires
-scripts/k8s/61-alert-service-down.sh # break one scrape target -> ServiceDown fires
+scripts/k8s/60-alerts-demo.sh         # a DLT payment -> DeadLetterMessages fires
+scripts/k8s/61-alert-service-down.sh  # break one scrape target -> ServiceDown fires
+scripts/k8s/62-alerts-meta-demo.sh    # self-scrape targets UP + Watchdog delivered
+scripts/k8s/63-alerts-runtime-demo.sh # roll consumers -> KafkaConsumerRebalanceFrequent
 ```
 
-Both scripts drive a real signal, wait for the rule to fire and assert the
-notification reached Alertmanager.
+All four drive a real signal, wait for the rule to fire and assert the
+notification reached Alertmanager; `63` also prints the live database/JVM/Kafka
+signals behind the runtime alerts.
 
 ### Adding an alert
 

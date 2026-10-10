@@ -85,6 +85,8 @@ scripts/k8s/70-metrics-demo.sh  # drive traffic for the metric dashboards
 scripts/k8s/80-logs-demo.sh     # drive traffic for the log dashboard
 scripts/k8s/60-alerts-demo.sh   # fire DeadLetterMessages end to end
 scripts/k8s/61-alert-service-down.sh  # fire ServiceDown + inhibition
+scripts/k8s/62-alerts-meta-demo.sh    # self-scrape targets + Watchdog delivery
+scripts/k8s/63-alerts-runtime-demo.sh # Kafka rebalance + runtime/db signals
 scripts/k8s/90-teardown.sh  # delete the cluster
 ```
 
@@ -161,7 +163,15 @@ inhibits and routes them to the **Mailpit** SMTP sink. Both are provisioned from
 ```bash
 scripts/k8s/60-alerts-demo.sh          # DLT payment -> DeadLetterMessages fires
 scripts/k8s/61-alert-service-down.sh   # break one scrape target -> ServiceDown
+scripts/k8s/62-alerts-meta-demo.sh     # self-scrape targets UP + Watchdog delivered
+scripts/k8s/63-alerts-runtime-demo.sh  # roll consumers -> KafkaConsumerRebalanceFrequent
 ```
+
+Prometheus scrapes its own `/metrics` and Alertmanager's, so the meta-alerts
+(Watchdog, notification failures, rule evaluation time) have data. `62` asserts
+that self-monitoring is in place and that Watchdog is delivered; `63` rolls the
+`payment-processor` replicas to force consumer-group rebalances and prints the
+live database/JVM/Kafka signals.
 
 Both scripts port-forward Prometheus/Alertmanager, drive a real signal, wait for
 the rule's `for` window and assert the alert reached Alertmanager. Browse the

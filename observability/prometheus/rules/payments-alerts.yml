@@ -177,3 +177,200 @@ groups:
           summary: "High JVM heap usage on {{ $labels.application }}"
           description: "Heap usage has been above 85% for 10 minutes."
           runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#highjvmheapusage"
+
+      - alert: JvmGcOverheadHigh
+        expr: max by (application) (jvm_gc_overhead) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High GC overhead on {{ $labels.application }}"
+          description: "More than 20% of the JVM time has been spent in GC for 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#jvmgcoverheadhigh"
+
+      - alert: JvmGcPauseHigh
+        expr: max by (application) (jvm_gc_pause_seconds_max) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Long GC pauses on {{ $labels.application }}"
+          description: "A GC pause above 1s was observed for 5 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#jvmgcpausehigh"
+
+      - alert: ProcessCpuHigh
+        expr: max by (application) (process_cpu_usage) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High process CPU on {{ $labels.application }}"
+          description: "The process has been using more than 0.9 CPU cores for 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#processcpuhigh"
+
+      - alert: FileDescriptorsHigh
+        expr: |
+          max by (application) (process_files_open_files)
+            /
+          clamp_min(max by (application) (process_files_max_files), 1) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High file descriptor usage on {{ $labels.application }}"
+          description: "More than 80% of the file descriptors are in use for 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#filedescriptorshigh"
+
+  # The database backs idempotency, the outbox and notification dedup, so pool
+  # exhaustion is a first-class outage. HikariCP metrics come from the Actuator.
+  - name: payments-database
+    rules:
+      - alert: DbConnectionPoolExhausted
+        expr: sum by (application) (hikaricp_connections_pending) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DB connection pool exhausted on {{ $labels.application }}"
+          description: "Threads have been waiting for a database connection for 2 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#dbconnectionpoolexhausted"
+
+      - alert: DbConnectionAcquireTimeouts
+        expr: increase(hikaricp_connections_timeout_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DB connection acquire timeouts on {{ $labels.application }}"
+          description: "At least one thread timed out waiting for a database connection in the last 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#dbconnectionacquiretimeouts"
+
+      - alert: DbPoolSaturated
+        expr: |
+          max by (application) (hikaricp_connections_active)
+            /
+          clamp_min(max by (application) (hikaricp_connections_max), 1) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DB pool near saturation on {{ $labels.application }}"
+          description: "More than 90% of the database pool is in use for 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#dbpoolsaturated"
+
+      - alert: DbConnectionAcquireSlow
+        expr: |
+          sum by (application) (rate(hikaricp_connections_acquire_seconds_sum[5m]))
+            /
+          clamp_min(sum by (application) (rate(hikaricp_connections_acquire_seconds_count[5m])), 0.001) > 0.25
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow DB connection acquisition on {{ $labels.application }}"
+          description: "The average time to acquire a database connection has been above 250ms for 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#dbconnectionacquireslow"
+
+  # Client-side Kafka health, complementing KafkaConsumerLagHigh. The metrics come
+  # from the Micrometer Kafka consumer binder, so they exist only while a
+  # consumer is running.
+  - name: payments-kafka
+    rules:
+      - alert: KafkaRebalanceStorm
+        expr: increase(kafka_consumer_coordinator_failed_rebalance_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Failed Kafka rebalance on {{ $labels.application }}"
+          description: "A consumer group rebalance failed in the last 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#kafkarebalancestorm"
+
+      - alert: KafkaConsumerRebalanceFrequent
+        expr: increase(kafka_consumer_coordinator_rebalance_total[10m]) > 2
+        for: 1m
+        labels:
+          severity: info
+        annotations:
+          summary: "Frequent Kafka rebalances on {{ $labels.application }}"
+          description: "More than 2 consumer group rebalances in 10 minutes; consumers keep dropping in and out."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#kafkaconsumerrebalancefrequent"
+
+      - alert: KafkaConsumerThrottled
+        expr: max by (application) (kafka_consumer_fetch_manager_fetch_throttle_time_avg) > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer throttled on {{ $labels.application }}"
+          description: "Fetch requests have been throttled by the broker (avg > 100ms) for 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#kafkaconsumerthrottled"
+
+      - alert: KafkaDisconnected
+        expr: max by (application) (kafka_consumer_connection_count) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka consumer disconnected on {{ $labels.application }}"
+          description: "The consumer has no connection to any broker for 5 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#kafkadisconnected"
+
+      - alert: KafkaAuthFailures
+        expr: increase(kafka_consumer_failed_authentication_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka authentication failures on {{ $labels.application }}"
+          description: "The consumer failed to authenticate to a broker in the last 10 minutes."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#kafkaauthfailures"
+
+  # Meta-alerts: the alerting pipeline monitors itself. Prometheus scrapes its own
+  # /metrics and Alertmanager's, so a failing rule evaluation or a broken
+  # notification path is itself visible.
+  - name: payments-meta
+    rules:
+      # Dead man's switch: always firing, so the absence of its delivery is the
+      # alert. Route it to the same receiver and alarm if it ever stops arriving.
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Alerting pipeline is up"
+          description: "This alert always fires and is delivered to Alertmanager; its absence means the pipeline is broken."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#watchdog"
+
+      - alert: AlertmanagerNotificationFailing
+        expr: increase(alertmanager_notifications_failed_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alertmanager cannot deliver notifications"
+          description: "Alertmanager failed to send a notification in the last 5 minutes; alerts may be silently lost."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#alertmanagernotificationfailing"
+
+      - alert: PrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus config reload failed"
+          description: "Prometheus could not reload its configuration; the last valid config is still in use."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#prometheusconfigreloadfailed"
+
+      - alert: PrometheusRuleEvalSlow
+        expr: |
+          max by (rule_group) (prometheus_rule_group_last_duration_seconds)
+            >
+          max by (rule_group) (prometheus_rule_group_interval_seconds)
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus rule group is slow"
+          description: "Rule group {{ $labels.rule_group }} takes longer to evaluate than its interval."
+          runbook_url: "https://github.com/peter711/payments/blob/main/docs/operations.md#prometheusruleevalslow"
