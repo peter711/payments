@@ -1,8 +1,9 @@
 # Payments
 
 A small **event-driven payments platform** built with Spring Boot and Kafka:
-submit a payment over HTTP, have it processed against a (mock) payment gateway,
-and receive a notification on the outcome.
+submit a payment over HTTP, have it processed against a payment gateway (a local
+mock by default, or the real Stripe API in a sandbox), and receive a
+notification on the outcome.
 
 The interesting part is not the happy path but what happens when things go
 wrong: Kafka only guarantees *at-least-once* delivery, yet a payment must be
@@ -14,6 +15,8 @@ consumer inbox, a gateway idempotency ledger and a transactional outbox.
 - **Contract-first events** — versioned JSON Schemas shareable across services.
 - **Idempotent consumers** — a durable inbox plus a gateway ledger, so retries
   and restarts never double-charge or double-notify.
+- **A pluggable payment gateway** — a local mock by default, or the real Stripe
+  API (sandbox) behind the same `PaymentGateway` port.
 - **Transactional outbox** — the outcome and its outgoing event are committed in
   one transaction and published by a scheduled relay with retries and a
   dead-letter topic.
@@ -34,7 +37,7 @@ consumer inbox, a gateway idempotency ledger and a transactional outbox.
                 ┌──────────────┐   payments.requested   ┌───────────────────┐
                 │  payment-api │ ─────────────────────▶ │ payment-processor │
                 └──────────────┘                        └─────────┬─────────┘
-                                                                  │ (mock) gateway
+                                                                  │ gateway (mock | Stripe)
                                                        outcome + outbox event
                                                        committed in one transaction
                                                                   │
@@ -56,11 +59,12 @@ carrying the event id, type, version and correlation/causation ids.
 |---|---|---|
 | [`payments-contracts`](payments-contracts) | library | Kafka topics, event envelope, event types and JSON Schemas |
 | [`payments-observability`](payments-observability) | library (starter) | Micrometer/Prometheus defaults, `LogContext` correlation, shared YAML |
+| [`payments-gateway`](payments-gateway) | library (starter) | `PaymentGateway` port and the Stripe adapter (isolates `stripe-java`) |
 | [`payment-api`](payment-api) | Spring Boot app | REST `POST /payments` → `payments.requested` |
 | [`payment-processor`](payment-processor) | Spring Boot app | Consume requests, call the gateway, idempotency + outbox → `completed`/`failed` |
 | [`notification-service`](notification-service) | Spring Boot app | Consume outcomes, deduplicate, send notifications |
 
-Only the last three are runnable services; the first two are shared libraries.
+Only the last three are runnable services; the first three are shared libraries.
 
 ## Quick start
 
@@ -79,6 +83,23 @@ Then look at Grafana (<http://localhost:13000>) or the topic contents in Kafka U
 (<http://localhost:18090>). Other options — running services from your IDE, or
 the two-replica Kubernetes stack — are covered in
 [docs/getting-started.md](docs/getting-started.md).
+
+### Charging through Stripe (sandbox)
+
+The pipeline runs on the mock gateway by default. To route payments through the
+real Stripe API, enable the Stripe adapter with a test key:
+
+```bash
+export STRIPE_API_KEY=sk_test_...        # from the Stripe dashboard, test mode
+export PAYMENT_GATEWAY_PROVIDER=stripe
+docker compose -f docker-compose.full.yml up --build
+```
+
+`pm_card_visa` (the default `payment.stripe.payment-method`) always succeeds,
+while other test methods such as `pm_card_visa_chargeDeclined` return a decline.
+`paymentId` is sent as the Stripe idempotency key, so retries never double
+charge. See [docs/configuration.md](docs/configuration.md) for the full set of
+Stripe properties.
 
 ## Documentation
 
@@ -101,6 +122,7 @@ the two-replica Kubernetes stack — are covered in
 ├── notification-service/     # Kafka consumer + notification sender
 ├── payments-contracts/       # shared events, topics and JSON Schemas
 ├── payments-observability/   # shared metrics conventions
+├── payments-gateway/         # PaymentGateway port + Stripe adapter
 ├── deploy/k8s/               # kustomize base + local (k3d) overlay
 ├── observability/            # Prometheus/Loki config, Alloy pipeline, Grafana dashboards
 ├── scripts/                  # curl / kafka / k8s demo helpers

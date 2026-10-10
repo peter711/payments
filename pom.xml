@@ -17,6 +17,7 @@
 	<modules>
 		<module>payments-contracts</module>
 		<module>payments-observability</module>
+		<module>payments-gateway</module>
 		<module>payment-api</module>
 		<module>payment-processor</module>
 		<module>notification-service</module>

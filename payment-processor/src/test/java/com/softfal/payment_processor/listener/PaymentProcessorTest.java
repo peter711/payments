@@ -1,9 +1,6 @@
 package com.softfal.payment_processor.listener;
 
-import com.softfal.payment_processor.exception.GatewayTimeoutException;
 import com.softfal.payment_processor.exception.InvalidPaymentException;
-import com.softfal.payment_processor.gateway.PaymentGateway;
-import com.softfal.payment_processor.gateway.PaymentGatewayResult;
 import com.softfal.payment_processor.idempotency.InMemoryProcessedPaymentStore;
 import com.softfal.payment_processor.metrics.PaymentProcessorMetrics;
 import com.softfal.payment_processor.outbox.InMemoryOutboxStore;
@@ -15,6 +12,9 @@ import com.softfal.payments.contracts.event.EventEnvelopes;
 import com.softfal.payments.contracts.event.EventType;
 import com.softfal.payments.contracts.event.PaymentRequested;
 import com.softfal.payments.contracts.topic.PaymentTopics;
+import com.softfal.payments.gateway.GatewayTimeoutException;
+import com.softfal.payments.gateway.PaymentGateway;
+import com.softfal.payments.gateway.PaymentGatewayResult;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;

@@ -29,8 +29,14 @@ All services import the shared defaults from `payments-observability.yml` via
 | Property | Default | Notes |
 |---|---|---|
 | `spring.datasource.url` | `jdbc:h2:file:./data/payment-processor;AUTO_SERVER=TRUE` | Durable inbox + outbox |
+| `payment.gateway.provider` | `mock` | `mock` or `stripe`; selects the `PaymentGateway` adapter |
 | `payment.mock.success-rate` | `0.8` | Probability the mock gateway accepts |
 | `payment.mock.delay-ms` | `200` | Simulated gateway latency |
+| `payment.stripe.api-key` | *(none — required for `stripe`)* | Stripe secret key (`sk_test_...` in the sandbox) |
+| `payment.stripe.api-base` | `https://api.stripe.com` | Stripe API base URL (overridden by tests) |
+| `payment.stripe.payment-method` | `pm_card_visa` | Payment method confirmed on the PaymentIntent |
+| `payment.stripe.timeout-ms` | `5000` | Connect/read timeout for a Stripe call |
+| `payment.stripe.max-network-retries` | `2` | Automatic SDK retries of a failed request |
 | `payment.outbox.poll-interval-ms` | `500` | Relay poll period |
 | `payment.outbox.batch-size` | `100` | Rows claimed per poll |
 | `payment.outbox.max-attempts` | `10` | Publish attempts before a row is `FAILED` |
@@ -62,6 +68,10 @@ All services import the shared defaults from `payments-observability.yml` via
 |---|---|---|---|
 | `SPRING_KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | compose / k8s | Kafka bootstrap servers |
 | `SPRING_PROFILES_ACTIVE` | — | k8s | Activates the PostgreSQL profile (`k8s`) |
+| `PAYMENT_GATEWAY_PROVIDER` | `mock` | compose / k8s | Selects the gateway adapter (`mock` or `stripe`) |
+| `STRIPE_API_KEY` | *(none)* | compose / k8s | Stripe secret key; required when the provider is `stripe` |
+| `STRIPE_API_BASE` | `https://api.stripe.com` | — | Optional Stripe API base override |
+| `STRIPE_PAYMENT_METHOD` | `pm_card_visa` | — | Optional sandbox payment method |
 | `DB_USERNAME` | `payments` | k8s | PostgreSQL user |
 | `DB_PASSWORD` | *(none — required)* | k8s | PostgreSQL password; a missing value fails fast |
 | `PAYMENTS_ENV` | `local` | k8s | The `env` metric tag (k8s sets `production`) |
@@ -96,9 +106,14 @@ Credentials are never committed:
   ```
 
   `.env` is gitignored; a missing file makes `docker compose` fail with a clear
-  message instead of falling back to a known password.
+  message instead of falling back to a known password. The same file carries the
+  Stripe secret key (`STRIPE_API_KEY`, empty by default) used when
+  `PAYMENT_GATEWAY_PROVIDER=stripe`.
 
 - **Kubernetes** references secrets that are provisioned out-of-band:
   - `postgres-credentials` (`username`/`password`) — template in
     [`deploy/k8s/base/postgres/secret.example.yaml`](../deploy/k8s/base/postgres/secret.example.yaml);
+  - `stripe-credentials` (`api-key`) — template in
+    [`deploy/k8s/base/apps/payment-processor/stripe-secret.example.yaml`](../deploy/k8s/base/apps/payment-processor/stripe-secret.example.yaml);
+    the reference is optional, so the default mock deployment needs nothing extra;
   - the Grafana admin login is added only by the local overlay.

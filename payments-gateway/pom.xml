@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>4.1.1</version>
+		<relativePath/> <!-- lookup parent from repository -->
+	</parent>
+	<groupId>com.softfal</groupId>
+	<artifactId>payments-gateway</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>payments-gateway</name>
+	<description>Payment gateway port and the Stripe adapter shared by the payments services</description>
+
+	<properties>
+		<java.version>17</java.version>
+		<maven.compiler.source>${java.version}</maven.compiler.source>
+		<maven.compiler.target>${java.version}</maven.compiler.target>
+		<stripe-java.version>34.0.0</stripe-java.version>
+		<wiremock.version>3.13.2</wiremock.version>
+	</properties>
+
+	<dependencies>
+		<!--
+			The gateway port speaks the domain event, so the module depends on the
+			contracts library (PaymentRequested) but not on any service.
+		-->
+		<dependency>
+			<groupId>com.softfal</groupId>
+			<artifactId>payments-contracts</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
+		</dependency>
+		<!--
+			Provides @AutoConfiguration and @ConditionalOnProperty so the Stripe
+			adapter registers itself when payment.gateway.provider=stripe, without
+			the consuming service having to scan this package.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-autoconfigure</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+		</dependency>
+		<!--
+			The only third-party SDK in the whole monorepo. Isolating it here keeps
+			stripe-java (and its Gson dependency) out of the service modules.
+		-->
+		<dependency>
+			<groupId>com.stripe</groupId>
+			<artifactId>stripe-java</artifactId>
+			<version>${stripe-java.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!--
+			Runs an in-process HTTP server so the Stripe adapter is tested against
+			a fake api.stripe.com: no external services and no real sandbox calls.
+		-->
+		<dependency>
+			<groupId>org.wiremock</groupId>
+			<artifactId>wiremock-standalone</artifactId>
+			<version>${wiremock.version}</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+</project>

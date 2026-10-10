@@ -74,6 +74,18 @@ spec:
                   key: password
             - name: PAYMENTS_ENV
               value: production
+            # Payment gateway: mock (default) or stripe. The Stripe key is
+            # optional, so the default cluster comes up without a sandbox
+            # account; provision stripe-credentials and switch the provider to
+            # `stripe` to exercise the real API.
+            - name: PAYMENT_GATEWAY_PROVIDER
+              value: mock
+            - name: STRIPE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-credentials
+                  key: api-key
+                  optional: true
             # Emit ECS JSON logs so Alloy/Loki can index them.
             - name: LOGGING_STRUCTURED_FORMAT_CONSOLE
               value: ecs

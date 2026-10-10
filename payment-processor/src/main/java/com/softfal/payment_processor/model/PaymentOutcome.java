@@ -8,7 +8,9 @@ import java.time.Instant;
  * published so a redelivered record can be answered deterministically.
  *
  * @param successful whether the gateway accepted the payment
- * @param reason     failure reason, {@code null} on success
+ * @param reason     failure reason, {@code null} on success; bounded to the
+ *                   persistence column width so a chatty provider cannot break
+ *                   the outcome write
  */
 public record PaymentOutcome(
         String paymentId,
@@ -19,4 +21,13 @@ public record PaymentOutcome(
         String reason,
         Instant completedAt
 ) {
+
+    /** Matches the {@code reason} column width in schema.sql / schema-postgres.sql. */
+    private static final int MAX_REASON_LENGTH = 255;
+
+    public PaymentOutcome {
+        if (reason != null && reason.length() > MAX_REASON_LENGTH) {
+            reason = reason.substring(0, MAX_REASON_LENGTH - 3) + "...";
+        }
+    }
 }

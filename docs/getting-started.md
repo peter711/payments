@@ -11,7 +11,7 @@
 
 ## Build and test
 
-The three services depend on the two shared libraries, so build the whole
+The three services depend on the three shared libraries, so build the whole
 reactor from the repository root:
 
 ```bash

@@ -3,6 +3,7 @@ package com.softfal.payment_processor.config;
 import com.softfal.payment_processor.exception.InvalidPaymentException;
 import com.softfal.payment_processor.metrics.PaymentProcessorMetrics;
 import com.softfal.payments.contracts.topic.PaymentTopics;
+import com.softfal.payments.gateway.InvalidGatewayRequestException;
 import jakarta.annotation.PreDestroy;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
@@ -63,9 +64,10 @@ public class KafkaErrorHandlingConfig {
                 },
                 new FixedBackOff(1000L, 2L));
         // Validation errors are permanent: retrying cannot succeed, so send them
-        // straight to the dead letter topic. Transient failures (e.g. gateway
+        // straight to the dead letter topic. A malformed/unauthorized gateway
+        // request is equally permanent. Transient failures (e.g. gateway
         // timeouts) keep the default retryable behaviour.
-        errorHandler.addNotRetryableExceptions(InvalidPaymentException.class);
+        errorHandler.addNotRetryableExceptions(InvalidPaymentException.class, InvalidGatewayRequestException.class);
         log.info("Configured DefaultErrorHandler with DeadLetterPublishingRecoverer publishing to '{}'",
                 DEAD_LETTER_TOPIC);
         return errorHandler;

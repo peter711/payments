@@ -36,9 +36,20 @@ spring:
       ack-mode: record
 
 payment:
+  gateway:
+    # mock (default) keeps the local pipeline self-contained; stripe routes the
+    # same flow through the real Stripe API (sandbox by default).
+    provider: ${PAYMENT_GATEWAY_PROVIDER:mock}
   mock:
     success-rate: 0.8
     delay-ms: 200
+  stripe:
+    api-key: ${STRIPE_API_KEY:}
+    api-base: ${STRIPE_API_BASE:https://api.stripe.com}
+    # Sandbox test payment method; swap for a real one outside the sandbox.
+    payment-method: ${STRIPE_PAYMENT_METHOD:pm_card_visa}
+    timeout-ms: 5000
+    max-network-retries: 2
   outbox:
     poll-interval-ms: 500
     initial-delay-ms: 500

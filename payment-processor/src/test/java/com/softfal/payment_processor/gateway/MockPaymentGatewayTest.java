@@ -1,7 +1,8 @@
 package com.softfal.payment_processor.gateway;
 
-import com.softfal.payment_processor.exception.GatewayTimeoutException;
 import com.softfal.payments.contracts.event.PaymentRequested;
+import com.softfal.payments.gateway.GatewayTimeoutException;
+import com.softfal.payments.gateway.PaymentGatewayResult;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

@@ -16,6 +16,7 @@ IDE (`localhost:9080`) and the infra-only compose file.
 | `40-send-without-payment-id-curl.sh` | No `paymentId`; the API generates one |
 | `50-send-mixed-outcomes-curl.sh` | Successes, declines and dead letters together |
 | `60-send-concurrent-duplicate-curl.sh` | The same `paymentId` fired concurrently |
+| `70-send-stripe-payment-curl.sh` | A payment charged by the real Stripe API (IDE + full stacks; `VERIFY=1` waits for the outcome on the full stack) |
 
 | Folder | Target |
 |---|---|

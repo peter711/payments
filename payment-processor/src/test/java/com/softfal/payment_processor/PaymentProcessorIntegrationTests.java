@@ -1,12 +1,12 @@
 package com.softfal.payment_processor;
 
 import com.softfal.payment_processor.gateway.MockPaymentGateway;
-import com.softfal.payment_processor.gateway.PaymentGateway;
 import com.softfal.payments.contracts.event.EventEnvelope;
 import com.softfal.payments.contracts.event.EventEnvelopes;
 import com.softfal.payments.contracts.event.EventType;
 import com.softfal.payments.contracts.event.PaymentCompleted;
 import com.softfal.payments.contracts.event.PaymentRequested;
+import com.softfal.payments.gateway.PaymentGateway;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.producer.ProducerConfig;

@@ -1,9 +1,12 @@
 package com.softfal.payment_processor.gateway;
 
-import com.softfal.payment_processor.exception.GatewayTimeoutException;
 import com.softfal.payments.contracts.event.PaymentRequested;
+import com.softfal.payments.gateway.GatewayTimeoutException;
+import com.softfal.payments.gateway.PaymentGateway;
+import com.softfal.payments.gateway.PaymentGatewayResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -34,6 +37,7 @@ import java.util.random.RandomGenerator;
  * allowed to reach the gateway again.</p>
  */
 @Component
+@ConditionalOnProperty(prefix = "payment.gateway", name = "provider", havingValue = "mock", matchIfMissing = true)
 public class MockPaymentGateway implements PaymentGateway {
 
     /** Account whose gateway call times out twice and succeeds on the third attempt. */

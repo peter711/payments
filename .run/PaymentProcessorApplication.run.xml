@@ -1,9 +1,12 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="PaymentProcessorApplication" type="Application" factoryName="Application">
+    <option name="envFilePaths">
+      <option value="$PROJECT_DIR$/.env" />
+    </option>
     <option name="MAIN_CLASS_NAME" value="com.softfal.payment_processor.PaymentProcessorApplication" />
     <module name="payment-processor" />
-    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/payment-processor" />
     <option name="VM_PARAMETERS" value="-Dserver.port=9081" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/payment-processor" />
     <method v="2">
       <option name="Make" enabled="true" />
     </method>

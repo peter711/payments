@@ -2,19 +2,26 @@
 
 ## Reactor layout
 
-Five Maven modules; two are libraries and three are runnable Spring Boot apps.
+Six Maven modules; three are libraries and three are runnable Spring Boot apps.
 
 ```
-payments-contracts ─┐
-                    ├─▶ payment-api
-payments-observability ─┬─▶ payment-processor
+payments-contracts ──┬─▶ payment-api
+                     ├─▶ payments-gateway ──▶ stripe-java
+                     └─▶ payment-processor
+
+payments-observability ─┬─▶ payment-api
+                        ├─▶ payment-processor
                         └─▶ notification-service
+
+payment-processor also depends on payments-gateway (the PaymentGateway port
+and the Stripe adapter).
 ```
 
 | Package root | Module |
 |---|---|
 | `com.softfal.payments.contracts` | payments-contracts |
 | `com.softfal.payments.observability` | payments-observability |
+| `com.softfal.payments.gateway` | payments-gateway |
 | `com.softfal.payment_api` | payment-api |
 | `com.softfal.payment_processor` | payment-processor |
 | `com.softfal.notification_service` | notification-service |
@@ -117,6 +124,9 @@ see `PaymentController`/`PaymentEventService`, `PaymentProcessor`,
   (`InMemoryProcessedPaymentStore`, `InMemoryOutboxStore`,
   `InMemoryGatewayChargeStore`), e.g. `MockPaymentGatewayTest`,
   `PaymentOutboxRelayTest`, `PaymentProcessorTest`.
+- The Stripe adapter is driven by WireMock against a fake `api.stripe.com`
+  (`StripePaymentGatewayTest` in `payments-gateway`), so no sandbox account or
+  network access is needed.
 - The contracts module validates sample payloads against the JSON Schemas with
   `json-schema-validator`.
 - Prometheus exposure is covered by `PrometheusEndpointTests` in payment-api.

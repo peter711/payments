@@ -1,4 +1,4 @@
-package com.softfal.payment_processor.gateway;
+package com.softfal.payments.gateway;
 
 /**
  * Outcome of a {@link PaymentGateway#callPaymentGateway} invocation.

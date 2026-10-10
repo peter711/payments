@@ -9,7 +9,7 @@
                 ┌──────────────┐   payments.requested   ┌───────────────────┐
                 │  payment-api │ ─────────────────────▶ │ payment-processor │
                 └──────────────┘                        └─────────┬─────────┘
-                                                                  │ (mock) gateway
+                                                                  │ gateway (mock | Stripe)
                                                        outcome + outbox event
                                                        committed in one transaction
                                                                   │
@@ -25,8 +25,9 @@
 | Component | Role |
 |---|---|
 | **payment-api** | Maps the HTTP request to the wire contract, ensures a `paymentId`, wraps the event in an envelope and publishes it to `payments.requested`, keyed by `accountId`. |
-| **payment-processor** | Consumes `payments.requested`, validates, deduplicates, calls the payment gateway and records the outcome + outgoing event with a transactional outbox. |
+| **payment-processor** | Consumes `payments.requested`, validates, deduplicates, calls the payment gateway (mock or Stripe) and records the outcome + outgoing event with a transactional outbox. |
 | **notification-service** | Consumes `payments.completed` and `payments.failed`, deduplicates per `(paymentId, topic)` and forwards to a notification sender. |
+| **payments-gateway** | The `PaymentGateway` port and its Stripe adapter (the only place `stripe-java` is used). |
 | **Kafka** | The backbone: four topics, three partitions each (local, RF=1). |
 | **Database** | Durable state. H2 file in local dev, shared PostgreSQL in the clustered profile. |
 
@@ -99,8 +100,9 @@ because each hop deduplicates against durable state.
 
 1. **Gateway ledger (`gateway_charge`).** The mock gateway records one row per
    `paymentId`; repeating a charge returns the stored result instead of charging
-   again. In production this is the payment provider's job, keyed by an
-   `Idempotency-Key`.
+   again. The Stripe adapter does not need it: it sends `paymentId` as the
+   provider's `Idempotency-Key`, so Stripe returns the original PaymentIntent on
+   a retry.
 2. **Processor inbox (`processed_payment`).** Before calling the gateway the
    processor looks for a final outcome and, if absent, `INSERT`s an `IN_PROGRESS`
    row (a unique-key claim). A redelivered record whose outcome is known is
@@ -145,17 +147,49 @@ backoff (1 s, 2 retries) and a `DeadLetterPublishingRecoverer`:
 
 - **Transient failures** (e.g. gateway timeouts) are retried; the flaky account
   times out twice and then succeeds.
-- **Permanent failures** (`InvalidPaymentException`: malformed payload, blank id,
-  non-positive amount) are marked non-retryable and go **straight** to
-  `payments.requested.DLT`.
+- **Permanent failures** are marked non-retryable and go **straight** to
+  `payments.requested.DLT`: `InvalidPaymentException` (malformed payload, blank
+  id, non-positive amount) and the gateway's `InvalidGatewayRequestException`
+  (authentication/configuration error, amount not representable in the currency).
 - A record that keeps failing exhausts the retries and is dead-lettered too.
 
 Deserialization failures keep the original bytes (routed through a raw `byte[]`
 producer template) so the dead-letter payload stays intact.
 
+## Payment gateway
+
+The gateway is a port (`PaymentGateway`) with swappable adapters, selected by
+`payment.gateway.provider` (`mock` by default, `stripe` for the sandbox):
+
+- **`MockPaymentGateway`** lives in `payment-processor` and keeps local runs and
+  the test suite self-contained.
+- **`StripePaymentGateway`** lives in the **`payments-gateway`** module and is the
+  only code in the repository that touches `stripe-java`.
+  `StripeGatewayAutoConfiguration` wires it only when
+  `payment.gateway.provider=stripe`, reading the `payment.stripe.*` settings
+  (`api-key`, `api-base`, `payment-method`, timeouts). Missing key with the
+  adapter enabled fails the service at startup.
+
+The adapter charges by creating and confirming a Stripe `PaymentIntent` in one
+synchronous call:
+
+- the amount is converted to the currency's minor unit (for example
+  `12.34 PLN -> 1234` grosze); zero-decimal currencies such as `JPY` are sent as
+  whole units, and an amount with too much precision is a permanent failure;
+- `paymentId` is sent as the `Idempotency-Key`, so a retry returns the original
+  `PaymentIntent` instead of charging twice;
+- only the `succeeded` status is a success. Other statuses (`requires_action`,
+  `processing`, ...) are recorded as failures — asynchronous confirmation and
+  webhooks are out of scope for this flow;
+- transient Stripe errors (connection, rate limit) surface as
+  `GatewayTimeoutException` so the record is retried, while a `CardException`
+  (decline) is recorded as a normal failure.
+
 ## Mock components
 
-The external systems are mocked so the pipeline runs with no third parties:
+The non-gateway external systems are mocked so the pipeline runs with no third
+parties; the payment gateway is either its mock or the real Stripe adapter (see
+[Payment gateway](#payment-gateway)).
 
 | Mock | Behaviour |
 |---|---|

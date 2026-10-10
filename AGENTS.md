@@ -1,7 +1,7 @@
 # AGENTS.md
 
-Event-driven payments platform: 5 Maven modules — 3 Spring Boot services and
-2 shared libraries. Deep documentation lives in `README.md` and `docs/`; read
+Event-driven payments platform: 6 Maven modules — 3 Spring Boot services and
+3 shared libraries. Deep documentation lives in `README.md` and `docs/`; read
 `docs/architecture.md` and `docs/development.md` before non-trivial changes.
 
 ## Commands
@@ -33,14 +33,19 @@ Compose requires `.env` (copy from `.env.example`).
   registry, JSON Schemas. **Source of truth for the wire format.**
 - `payments-observability` (library/starter) — shared Micrometer/Prometheus
   config, `LogContext`, shared YAML.
+- `payments-gateway` (library/starter) — the `PaymentGateway` port plus the
+  Stripe adapter; the only module allowed to depend on `stripe-java`.
 - `payment-api` → `payment-processor` → `notification-service` (runnable apps).
 - Package roots are intentionally inconsistent — do not "normalize" them:
   `com.softfal.payment_api`, `com.softfal.payment_processor`,
-  `com.softfal.notification_service`, but `com.softfal.payments.contracts` and
-  `com.softfal.payments.observability`.
+  `com.softfal.notification_service`, but `com.softfal.payments.contracts`,
+  `com.softfal.payments.observability` and `com.softfal.payments.gateway`.
 - **Jackson 3**, not 2: import `tools.jackson.databind.ObjectMapper`
   (never `com.fasterxml.jackson`). Injected where needed.
 - **Never hard-code a Kafka topic** — use `PaymentTopics`.
+- **Never hard-code a payment gateway** — select it with
+  `payment.gateway.provider` (`mock` default, `stripe` for the sandbox); the
+  adapter is wired by `StripeGatewayAutoConfiguration`.
 
 ## Gotchas
 

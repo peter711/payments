@@ -1,5 +1,6 @@
 package com.softfal.payment_processor.gateway;
 
+import com.softfal.payments.gateway.PaymentGatewayResult;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;

@@ -1,8 +1,6 @@
 package com.softfal.payment_processor.listener;
 
 import com.softfal.payment_processor.exception.InvalidPaymentException;
-import com.softfal.payment_processor.gateway.PaymentGateway;
-import com.softfal.payment_processor.gateway.PaymentGatewayResult;
 import com.softfal.payment_processor.idempotency.ProcessedPaymentStore;
 import com.softfal.payment_processor.metrics.PaymentProcessorMetrics;
 import com.softfal.payment_processor.model.PaymentOutcome;
@@ -11,6 +9,8 @@ import com.softfal.payments.contracts.event.EventEnvelope;
 import com.softfal.payments.contracts.event.EventEnvelopes;
 import com.softfal.payments.contracts.event.PaymentRequested;
 import com.softfal.payments.contracts.topic.PaymentTopics;
+import com.softfal.payments.gateway.PaymentGateway;
+import com.softfal.payments.gateway.PaymentGatewayResult;
 import com.softfal.payments.observability.LogContext;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;

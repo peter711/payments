@@ -1,5 +1,7 @@
 package com.softfal.payment_processor.gateway;
 
+import com.softfal.payments.gateway.PaymentGatewayResult;
+
 import java.util.Optional;
 
 /**

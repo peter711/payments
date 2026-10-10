@@ -183,6 +183,10 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       # ECS JSON logs, collected by the Alloy service and stored in Loki.
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+      # Payment gateway: mock (default) or stripe. The Stripe secret key is read
+      # from .env and never committed.
+      PAYMENT_GATEWAY_PROVIDER: ${PAYMENT_GATEWAY_PROVIDER:-mock}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
     volumes:
       - payment-processor-data:/app/data
     depends_on:
