@@ -6,6 +6,7 @@ import com.softfal.payments.contracts.event.EventEnvelopes;
 import com.softfal.payments.contracts.event.EventType;
 import com.softfal.payments.contracts.event.PaymentRequested;
 import com.softfal.payments.contracts.topic.PaymentTopics;
+import com.softfal.payments.observability.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -45,23 +46,38 @@ public class PaymentEventService {
         EventEnvelope envelope =
                 EventEnvelopes.wrap(EventType.PAYMENT_REQUESTED, event, objectMapper, correlationId, null);
 
-        log.info("Publishing {} to topic '{}' for accountId={} correlationId={} eventId={}",
-                EventType.PAYMENT_REQUESTED.eventType(), PaymentTopics.REQUESTED,
-                event.accountId(), correlationId, envelope.eventId());
+        try (var logContext = LogContext.scope()
+                .correlationId(correlationId)
+                .eventId(envelope.eventId())
+                .eventType(envelope.eventType())
+                .paymentId(event.paymentId())
+                .accountId(event.accountId())) {
+            log.info("Publishing {} to topic '{}' for accountId={} correlationId={} eventId={}",
+                    EventType.PAYMENT_REQUESTED.eventType(), PaymentTopics.REQUESTED,
+                    event.accountId(), correlationId, envelope.eventId());
 
-        metrics.requestAccepted();
-        kafkaTemplate.send(PaymentTopics.REQUESTED, event.accountId(), envelope)
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        metrics.publishFailed();
-                        log.error("Failed to publish payment event for accountId={}", event.accountId(), ex);
-                    } else {
-                        log.debug(
-                                "Published payment event for accountId={} to partition {} at offset {}",
-                                event.accountId(),
-                                result.getRecordMetadata().partition(),
-                                result.getRecordMetadata().offset());
-                    }
-                });
+            metrics.requestAccepted();
+            kafkaTemplate.send(PaymentTopics.REQUESTED, event.accountId(), envelope)
+                    .whenComplete((result, ex) -> {
+                        // The send callback runs on a different thread, so the MDC
+                        // scope above no longer applies; re-establish it here.
+                        try (var callbackLogContext = LogContext.scope()
+                                .correlationId(correlationId)
+                                .eventId(envelope.eventId())
+                                .paymentId(event.paymentId())
+                                .accountId(event.accountId())) {
+                            if (ex != null) {
+                                metrics.publishFailed();
+                                log.error("Failed to publish payment event for accountId={}", event.accountId(), ex);
+                            } else {
+                                log.debug(
+                                        "Published payment event for accountId={} to partition {} at offset {}",
+                                        event.accountId(),
+                                        result.getRecordMetadata().partition(),
+                                        result.getRecordMetadata().offset());
+                            }
+                        }
+                    });
+        }
     }
 }

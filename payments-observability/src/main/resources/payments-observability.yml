@@ -24,6 +24,20 @@ management:
         http.server.requests: true
         payments.processor.gateway.duration: true
 
+logging:
+  # Structured JSON logging. The Elastic Common Schema (ECS) output is switched
+  # on where logs are collected rather than in the IDE: the compose services and
+  # the k8s deployments set LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs, which binds
+  # to logging.structured.format.console. Left unset, the services keep the
+  # human-readable Spring Boot console format for local development.
+  structured:
+    ecs:
+      service:
+        # service.name defaults to spring.application.name; only the environment
+        # needs to be supplied explicitly so Loki/Grafana can tell deployments
+        # apart.
+        environment: ${PAYMENTS_ENV:local}
+
 spring:
   kafka:
     template:

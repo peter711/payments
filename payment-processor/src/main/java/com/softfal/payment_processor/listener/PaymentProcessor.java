@@ -11,6 +11,7 @@ import com.softfal.payments.contracts.event.EventEnvelope;
 import com.softfal.payments.contracts.event.EventEnvelopes;
 import com.softfal.payments.contracts.event.PaymentRequested;
 import com.softfal.payments.contracts.topic.PaymentTopics;
+import com.softfal.payments.observability.LogContext;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,38 +63,47 @@ public class PaymentProcessor {
     @KafkaListener(topics = PaymentTopics.REQUESTED)
     public void onPaymentRequested(EventEnvelope envelope) {
         PaymentRequested event = payload(envelope);
-        log.info("Processing payment paymentId={} for accountId={} eventId={} correlationId={}",
-                event.paymentId(), event.accountId(), envelope.eventId(), envelope.correlationId());
+        try (var logContext = LogContext.scope()
+                .correlationId(envelope.correlationId())
+                .causationId(envelope.causationId())
+                .eventId(envelope.eventId())
+                .eventType(envelope.eventType())
+                .paymentId(event.paymentId())
+                .accountId(event.accountId())
+                .topic(PaymentTopics.REQUESTED)) {
+            log.info("Processing payment paymentId={} for accountId={} eventId={} correlationId={}",
+                    event.paymentId(), event.accountId(), envelope.eventId(), envelope.correlationId());
 
-        validate(event);
+            validate(event);
 
-        Optional<PaymentOutcome> previousOutcome = processedPaymentStore.findFinal(event.paymentId());
-        if (previousOutcome.isPresent()) {
-            log.warn("Duplicate paymentId={} detected; outcome already recorded and queued in the outbox",
-                    event.paymentId());
-            metrics.duplicateSkipped();
-            return;
+            Optional<PaymentOutcome> previousOutcome = processedPaymentStore.findFinal(event.paymentId());
+            if (previousOutcome.isPresent()) {
+                log.warn("Duplicate paymentId={} detected; outcome already recorded and queued in the outbox",
+                        event.paymentId());
+                metrics.duplicateSkipped();
+                return;
+            }
+
+            processedPaymentStore.claim(event.paymentId());
+
+            Timer.Sample sample = metrics.startGatewayCall();
+            PaymentGatewayResult result;
+            try {
+                result = paymentGateway.callPaymentGateway(event);
+            } finally {
+                metrics.stopGatewayCall(sample);
+            }
+            PaymentOutcome outcome = new PaymentOutcome(
+                    event.paymentId(),
+                    event.accountId(),
+                    event.amount(),
+                    event.currency(),
+                    result.successful(),
+                    result.reason(),
+                    Instant.now());
+            metrics.outcome(result.successful());
+            outcomeRecorder.record(outcome, envelope.correlationId(), envelope.eventId());
         }
-
-        processedPaymentStore.claim(event.paymentId());
-
-        Timer.Sample sample = metrics.startGatewayCall();
-        PaymentGatewayResult result;
-        try {
-            result = paymentGateway.callPaymentGateway(event);
-        } finally {
-            metrics.stopGatewayCall(sample);
-        }
-        PaymentOutcome outcome = new PaymentOutcome(
-                event.paymentId(),
-                event.accountId(),
-                event.amount(),
-                event.currency(),
-                result.successful(),
-                result.reason(),
-                Instant.now());
-        metrics.outcome(result.successful());
-        outcomeRecorder.record(outcome, envelope.correlationId(), envelope.eventId());
     }
 
     private PaymentRequested payload(EventEnvelope envelope) {

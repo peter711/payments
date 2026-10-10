@@ -21,8 +21,9 @@ consumer inbox, a gateway idempotency ledger and a transactional outbox.
   `FOR UPDATE SKIP LOCKED`, so two replicas never publish the same event.
 - **Two local stacks** — `docker compose` and a two-replica k3d / Kubernetes
   deployment (kustomize).
-- **Metrics-first observability** — Micrometer → Actuator → Prometheus → Grafana,
-  with dashboards and alerts provisioned as code.
+- **Observability as code** — Micrometer → Actuator → Prometheus for metrics and
+  ECS JSON logs → Alloy → Loki, both visualized in one Grafana, with dashboards
+  and alerts provisioned as code.
 
 ## Architecture
 
@@ -54,7 +55,7 @@ carrying the event id, type, version and correlation/causation ids.
 | Module | Type | Responsibility |
 |---|---|---|
 | [`payments-contracts`](payments-contracts) | library | Kafka topics, event envelope, event types and JSON Schemas |
-| [`payments-observability`](payments-observability) | library (starter) | Micrometer/Prometheus defaults, common tags, shared YAML |
+| [`payments-observability`](payments-observability) | library (starter) | Micrometer/Prometheus defaults, `LogContext` correlation, shared YAML |
 | [`payment-api`](payment-api) | Spring Boot app | REST `POST /payments` → `payments.requested` |
 | [`payment-processor`](payment-processor) | Spring Boot app | Consume requests, call the gateway, idempotency + outbox → `completed`/`failed` |
 | [`notification-service`](notification-service) | Spring Boot app | Consume outcomes, deduplicate, send notifications |
@@ -101,7 +102,7 @@ the two-replica Kubernetes stack — are covered in
 ├── payments-contracts/       # shared events, topics and JSON Schemas
 ├── payments-observability/   # shared metrics conventions
 ├── deploy/k8s/               # kustomize base + local (k3d) overlay
-├── observability/            # Prometheus config, Grafana dashboards, alerts
+├── observability/            # Prometheus/Loki config, Alloy pipeline, Grafana dashboards
 ├── scripts/                  # curl / kafka / k8s demo helpers
 ├── bruno/                    # Bruno HTTP collection
 ├── docker-compose.yml        # infra only (Kafka + monitoring) for IDE dev

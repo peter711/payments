@@ -26,6 +26,12 @@ resources:
   - monitoring/grafana/deployment.yaml
   - monitoring/grafana/service.yaml
   - monitoring/grafana/ingress.yaml
+  # Log aggregation: Loki (storage/query) and Alloy (log collection DaemonSet).
+  - monitoring/loki/service.yaml
+  - monitoring/loki/statefulset.yaml
+  - monitoring/alloy/serviceaccount.yaml
+  - monitoring/alloy/rbac.yaml
+  - monitoring/alloy/daemonset.yaml
   - apps/payment-api/deployment.yaml
   - apps/payment-api/service.yaml
   - apps/payment-api/ingress.yaml

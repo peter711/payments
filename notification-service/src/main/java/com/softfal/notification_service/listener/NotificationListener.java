@@ -8,6 +8,7 @@ import com.softfal.payments.contracts.event.EventEnvelopes;
 import com.softfal.payments.contracts.event.EventType;
 import com.softfal.payments.contracts.event.PaymentEvent;
 import com.softfal.payments.contracts.topic.PaymentTopics;
+import com.softfal.payments.observability.LogContext;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,28 +56,36 @@ public class NotificationListener {
     }
 
     private void handle(String topic, EventEnvelope envelope) {
-        log.debug("Received {} event: {}", topic, envelope);
+        try (var logContext = LogContext.scope()
+                .topic(topic)
+                .correlationId(envelope.correlationId())
+                .causationId(envelope.causationId())
+                .eventId(envelope.eventId())
+                .eventType(envelope.eventType())) {
+            log.debug("Received {} event: {}", topic, envelope);
 
-        PaymentEvent event = unwrap(topic, envelope);
-        if (event == null) {
-            return;
-        }
+            PaymentEvent event = unwrap(topic, envelope);
+            if (event == null) {
+                return;
+            }
 
-        String paymentId = event.paymentId();
-        if (paymentId != null && !paymentId.isBlank()
-                && !dedupStore.markProcessed(envelope.eventId(), paymentId, topic)) {
-            log.warn("Duplicate outcome for paymentId={} on topic '{}'; skipping notification",
-                    paymentId, topic);
-            metrics.duplicateSkipped();
-            return;
-        }
+            String paymentId = event.paymentId();
+            logContext.paymentId(paymentId);
+            if (paymentId != null && !paymentId.isBlank()
+                    && !dedupStore.markProcessed(envelope.eventId(), paymentId, topic)) {
+                log.warn("Duplicate outcome for paymentId={} on topic '{}'; skipping notification",
+                        paymentId, topic);
+                metrics.duplicateSkipped();
+                return;
+            }
 
-        try {
-            notificationSender.send(topic, event);
-            metrics.notificationSent();
-        } catch (RuntimeException ex) {
-            metrics.notificationFailed();
-            throw ex;
+            try {
+                notificationSender.send(topic, event);
+                metrics.notificationSent();
+            } catch (RuntimeException ex) {
+                metrics.notificationFailed();
+                throw ex;
+            }
         }
     }
 

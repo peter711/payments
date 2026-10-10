@@ -61,6 +61,9 @@ spec:
               value: kafka:19092
             - name: PAYMENTS_ENV
               value: production
+            # Emit ECS JSON logs so Alloy/Loki can index them.
+            - name: LOGGING_STRUCTURED_FORMAT_CONSOLE
+              value: ecs
             - name: JAVA_TOOL_OPTIONS
               value: "-XX:MaxRAMPercentage=75"
           startupProbe:

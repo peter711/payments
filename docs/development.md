@@ -46,6 +46,9 @@ cd payment-processor && ./mvnw test   # a single module via its wrapper
   `accountId`, `correlationId` or any unbounded value — those belong in logs.
   Metrics are named in dot notation in code (`payments.processor.outcomes`) and
   surface in Prometheus as snake_case (`payments_processor_outcomes_total`).
+- **Logs carry the correlation.** Open a `LogContext` scope (`payments-observability`)
+  for the duration of a unit of work and chain the ids you know. Spring Boot emits
+  them as flat ECS JSON fields, and Alloy maps them to Loki structured metadata.
 - **Configuration as code.** Dashboards, datasources and alerts live in git
   under `observability/` and are provisioned, never clicked together in the UI.
 - **Two schemas stay in sync.** A persistence change must be reflected in both
@@ -79,6 +82,33 @@ bounded tag set. See `PaymentApiMetrics`, `PaymentProcessorMetrics` and
 
 The `payments-observability` module already attaches the common `application` and
 `env` tags, so new meters inherit them automatically.
+
+## Adding log context
+
+Wrap a unit of work in a `LogContext` scope and chain the fields that are known
+at that point; the scope restores the previous MDC values on close, so it nests
+safely across a request handler calling a service.
+
+```java
+try (var logContext = LogContext.scope()
+        .correlationId(envelope.correlationId())
+        .paymentId(event.paymentId())) {
+    log.info("Processing payment");
+}
+```
+
+| Key | Source |
+|---|---|
+| `correlation_id` | `EventEnvelope.correlationId()` (or `X-Correlation-Id`) |
+| `causation_id` | `EventEnvelope.causationId()` |
+| `event_id`, `event_type` | `EventEnvelope` |
+| `payment_id`, `account_id` | the domain event |
+| `topic` | the Kafka topic / handler |
+
+Keep keys flat and snake_case so they do not clash with the typed ECS field
+names. The `RecordInterceptor`-free design means every service owns its scopes;
+see `PaymentController`/`PaymentEventService`, `PaymentProcessor`,
+`PaymentOutboxRelay` and `NotificationListener` for examples.
 
 ## Testing
 

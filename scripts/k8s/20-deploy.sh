@@ -25,8 +25,11 @@ kubectl -n "$namespace" rollout status deployment/notification-service --timeout
 echo "### waiting for the monitoring stack"
 kubectl -n "$namespace" rollout status deployment/prometheus --timeout=300s
 kubectl -n "$namespace" rollout status deployment/grafana --timeout=300s
+kubectl -n "$namespace" rollout status statefulset/loki --timeout=300s
+kubectl -n "$namespace" rollout status daemonset/alloy --timeout=300s
 
 echo
 echo "Deployment ready. Run scripts/k8s/30-verify.sh to assert 2 ready replicas per service."
 echo "Grafana: http://grafana.localhost:8081 (admin/admin)"
-echo "Generate dashboard traffic with: scripts/k8s/70-metrics-demo.sh"
+echo "Generate dashboard traffic with: scripts/k8s/70-metrics-demo.sh (metrics)"
+echo "                                 scripts/k8s/80-logs-demo.sh (logs)"

@@ -3,6 +3,7 @@ package com.softfal.payment_api.controller;
 import com.softfal.payment_api.model.PaymentEventRequest;
 import com.softfal.payment_api.service.PaymentEventService;
 import com.softfal.payments.contracts.event.PaymentRequested;
+import com.softfal.payments.observability.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -50,10 +51,15 @@ public class PaymentController {
 
         PaymentEventRequest accepted = withPaymentId(request);
         String effectiveCorrelationId = effectiveCorrelationId(correlationId, accepted.paymentId());
-        log.info("Received payment request for paymentId={} correlationId={}",
-                accepted.paymentId(), effectiveCorrelationId);
+        try (var logContext = LogContext.scope()
+                .correlationId(effectiveCorrelationId)
+                .paymentId(accepted.paymentId())
+                .accountId(accepted.accountId())) {
+            log.info("Received payment request for paymentId={} correlationId={}",
+                    accepted.paymentId(), effectiveCorrelationId);
 
-        paymentEventService.send(toContract(accepted), effectiveCorrelationId);
+            paymentEventService.send(toContract(accepted), effectiveCorrelationId);
+        }
 
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(accepted);
     }

@@ -53,6 +53,8 @@ All services import the shared defaults from `payments-observability.yml` via
 | `management.endpoints.web.exposure.include` | `health,info,prometheus` | Explicit list, never `*` |
 | `management.observations.key-values.env` | `${PAYMENTS_ENV:local}` | `env` tag on every meter |
 | `management.metrics.distribution.percentiles-histogram.*` | — | Histograms for p95/p99 via `histogram_quantile` |
+| `logging.structured.format.console` | *(unset — plain text)* | Set to `ecs` in compose/k8s (`LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`) for ECS JSON logs |
+| `logging.structured.ecs.service.environment` | `${PAYMENTS_ENV:local}` | `service.environment` in the ECS JSON logs |
 
 ## Environment variables
 
@@ -63,6 +65,7 @@ All services import the shared defaults from `payments-observability.yml` via
 | `DB_USERNAME` | `payments` | k8s | PostgreSQL user |
 | `DB_PASSWORD` | *(none — required)* | k8s | PostgreSQL password; a missing value fails fast |
 | `PAYMENTS_ENV` | `local` | k8s | The `env` metric tag (k8s sets `production`) |
+| `LOGGING_STRUCTURED_FORMAT_CONSOLE` | *(unset)* | compose / k8s | `ecs` emits ECS JSON logs (collected by Alloy → Loki); unset keeps plain text |
 | `GRAFANA_ADMIN_USER` | *(from `.env`)* | compose | Grafana admin login |
 | `GRAFANA_ADMIN_PASSWORD` | *(from `.env`)* | compose | Grafana admin password |
 | `JAVA_TOOL_OPTIONS` | — | k8s | JVM flags (e.g. `-XX:MaxRAMPercentage=75`) |
@@ -77,6 +80,8 @@ All services import the shared defaults from `payments-observability.yml` via
 | Kafka (host listener) | 9092 | 9092 | 29092 | internal |
 | Kafka UI | 8090 | 8090 | 18090 | `kafka-ui.localhost:8081` |
 | Prometheus | 9090 | 9090 | 19090 | port-forward |
+| Loki | — | 3100 | 13100 | internal |
+| Alloy (UI) | — | 12345 | 12345 | internal |
 | Grafana | 3000 | 3000 | 13000 | `grafana.localhost:8081` |
 
 ## Secrets

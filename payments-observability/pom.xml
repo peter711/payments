@@ -45,6 +45,15 @@
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>
 		</dependency>
+		<!--
+			Used by LogContext to attach the correlation context to the SLF4J MDC.
+			The API only (the binding is provided by each service's logging
+			starter), so the module stays free of a logging implementation.
+		-->
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

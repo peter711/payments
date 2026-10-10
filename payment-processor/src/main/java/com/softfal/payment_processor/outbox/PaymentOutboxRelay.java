@@ -2,6 +2,7 @@ package com.softfal.payment_processor.outbox;
 
 import com.softfal.payment_processor.metrics.PaymentProcessorMetrics;
 import com.softfal.payments.contracts.event.EventEnvelope;
+import com.softfal.payments.observability.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -100,14 +101,22 @@ public class PaymentOutboxRelay {
     }
 
     private void publish(OutboxEvent event) throws Exception {
-        Object payload = deserialize(event);
-        kafkaTemplate.send(event.topic(), event.messageKey(), payload)
-                .get(PUBLISH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        log.info("Published outbox event id={} paymentId={} to topic '{}'",
-                event.id(), event.paymentId(), event.topic());
+        EventEnvelope envelope = deserialize(event);
+        try (var logContext = LogContext.scope()
+                .correlationId(envelope.correlationId())
+                .causationId(envelope.causationId())
+                .eventId(envelope.eventId())
+                .eventType(envelope.eventType())
+                .paymentId(event.paymentId())
+                .topic(event.topic())) {
+            kafkaTemplate.send(event.topic(), event.messageKey(), envelope)
+                    .get(PUBLISH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            log.info("Published outbox event id={} paymentId={} to topic '{}'",
+                    event.id(), event.paymentId(), event.topic());
+        }
     }
 
-    private Object deserialize(OutboxEvent event) throws Exception {
+    private EventEnvelope deserialize(OutboxEvent event) throws Exception {
         // The stored payload is a complete envelope; deserializing it validates
         // the metadata before the record is sent to the broker.
         return objectMapper.readValue(event.payload(), EventEnvelope.class);

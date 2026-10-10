@@ -51,6 +51,7 @@ scripts/k8s/30-verify.sh     # assert 2/2 ready replicas per service
 scripts/k8s/40-smoke.sh      # send two payments through the ingress
 scripts/k8s/50-failover.sh   # kill a replica, assert no double charge
 scripts/k8s/70-metrics-demo.sh  # drive traffic for the dashboards
+scripts/k8s/80-logs-demo.sh     # drive traffic for the log dashboard
 scripts/k8s/90-teardown.sh   # delete the cluster
 ```
 
@@ -83,6 +84,25 @@ API_URL=http://localhost:18080 scripts/k8s/70-metrics-demo.sh   # full compose s
 
 Tunables: `ROUNDS`, `BATCH`, `PARALLEL`, `BURST`, `SLEEP_BETWEEN`.
 
+## Generating data for the log dashboard
+
+The same workload feeds Loki. `scripts/k8s/80-logs-demo.sh` sends a payment,
+prints its `correlation_id` and then offers ready-to-use LogQL queries so the
+whole flow can be followed from the API to the notification:
+
+```bash
+scripts/k8s/80-logs-demo.sh
+API_URL=http://localhost:18080 scripts/k8s/80-logs-demo.sh   # full compose stack
+```
+
+Open Grafana → Explore → **Loki** (or the **Payments Logs** dashboard) and run:
+
+```logql
+{app="payment-processor"} | json | correlation_id="<id>"
+```
+
+Tunables: `ROUNDS`, `BATCH`, `PARALLEL`, `SLEEP_BETWEEN`.
+
 ## Troubleshooting
 
 | Symptom | Likely cause / fix |
@@ -92,4 +112,5 @@ Tunables: `ROUNDS`, `BATCH`, `PARALLEL`, `BURST`, `SLEEP_BETWEEN`.
 | Grafana asks for a login | Use `.env` (`GRAFANA_ADMIN_USER`/`GRAFANA_ADMIN_PASSWORD`). On k3d the dev login is `admin`/`admin` (local overlay only). |
 | `MissingVariableError: GRAFANA_ADMIN_USER` | `.env` missing — run `cp .env.example .env`. |
 | Kafka UI empty on k3d | Wait for `kafka-init` to complete; `scripts/k8s/20-deploy.sh` already waits for it. |
+| Grafana Loki datasource empty | The apps must emit ECS JSON (`LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`) and send traffic. On the IDE stack logs stay on the console; use the full compose stack or k3d. Check Alloy: `kubectl -n payments logs ds/alloy`. |
 | Port already in use | Change the host port in the relevant compose file or the k3d ports in `scripts/k8s/00-up.sh`. |

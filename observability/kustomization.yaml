@@ -17,9 +17,17 @@ configMapGenerator:
   - name: prometheus-rules
     files:
       - prometheus/rules/payments-alerts.yml
+  # Log aggregation: Loki storage/query config and the Alloy collection pipeline.
+  - name: loki-config
+    files:
+      - loki/loki-config.yml
+  - name: alloy-config
+    files:
+      - alloy/config.k8s.alloy
   - name: grafana-datasources
     files:
       - grafana/provisioning/datasources/prometheus.yml
+      - grafana/provisioning/datasources/loki.yml
   - name: grafana-dashboards-provider
     files:
       - grafana/provisioning/dashboards/dashboards.yml
@@ -29,3 +37,4 @@ configMapGenerator:
       - grafana/dashboards/service-red.json
       - grafana/dashboards/kafka.json
       - grafana/dashboards/jvm.json
+      - grafana/dashboards/logs.json

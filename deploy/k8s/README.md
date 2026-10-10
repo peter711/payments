@@ -16,6 +16,8 @@ Reproduces `docker-compose.full.yml` as a local Kubernetes deployment, with
 | payment-api | Deployment + Service + Ingress | **2** | http://payments.localhost:8081 |
 | payment-processor | Deployment + Service | **2** | shared Postgres, outbox leasing |
 | notification-service | Deployment + Service | **2** | shared Postgres, dedup |
+| Loki | StatefulSet + Service `loki` | 1 | log storage, 7-day retention, 2Gi PVC |
+| Alloy | DaemonSet | per node | tails container logs → Loki |
 
 ## Two replicas, always
 
@@ -77,6 +79,8 @@ scripts/k8s/20-deploy.sh    # apply the overlay and wait for readiness
 scripts/k8s/30-verify.sh    # assert 2/2 replicas per service
 scripts/k8s/40-smoke.sh     # send a couple of payments via the ingress
 scripts/k8s/50-failover.sh  # kill a processor replica; assert no double charge
+scripts/k8s/70-metrics-demo.sh  # drive traffic for the metric dashboards
+scripts/k8s/80-logs-demo.sh     # drive traffic for the log dashboard
 scripts/k8s/90-teardown.sh  # delete the cluster
 ```
 
@@ -123,10 +127,31 @@ The duplicate scenarios (20, 60) also print the exact `psql` command to confirm
 a single charge and a single outbox row per `paymentId` in the shared
 PostgreSQL.
 
+## Logs
+
+The application pods emit **ECS JSON** (`LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`,
+set in each Deployment). An **Alloy DaemonSet** tails every container's log,
+parses the JSON and pushes it to **Loki**; Grafana ships a `Loki` datasource and
+the **Payments Logs** dashboard. The `correlation_id` / `payment_id` fields
+travel as Loki structured metadata, so they can be used in queries without
+becoming index labels:
+
+```logql
+{app="payment-processor"} | json | correlation_id="<id>"
+```
+
+Loki has no ingress; query it through Grafana
+(http://grafana.localhost:8081 → Explore → Loki) or port-forward it directly:
+
+```bash
+kubectl -n payments port-forward svc/loki 3100:3100
+```
+
 ## Endpoints
 
 * `payment-api` — http://payments.localhost:8081/payments
 * Kafka UI — http://kafka-ui.localhost:8081
+* Grafana (metrics + logs) — http://grafana.localhost:8081
 
 `*.localhost` resolves to `127.0.0.1` on macOS, so no `/etc/hosts` edits are
 needed. If the ingress is not reachable, fall back to port-forwarding:

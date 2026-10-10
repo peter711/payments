@@ -7,6 +7,7 @@
 #   - Kafka UI  : http://localhost:8090
 #   - Prometheus: http://localhost:9090
 #   - Grafana   : http://localhost:3000  (anonymous admin; admin login from .env)
+#   - Loki      : http://localhost:3100  (Grafana "Loki" datasource)
 #
 # The services are expected on the host at the ports set in .run/ (9080/9081/
 # 9082); Prometheus scrapes them via host.docker.internal. This file only brings
@@ -96,4 +97,37 @@ services:
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
+      - loki
+    restart: unless-stopped
+
+  # Log aggregation for the full stacks: Loki stores, Alloy collects. In THIS
+  # stack the application services run from the IDE on the host (not as
+  # containers), so Alloy has nothing to tail; the services keep logging to the
+  # IDE console. Loki is started anyway so the Grafana "Loki" datasource
+  # resolves. Use docker-compose.full.yml (or k8s) for centralized logs.
+  loki:
+    image: grafana/loki:3.5.4
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.20.1
+    container_name: alloy
+    ports:
+      - "12345:12345"
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+    volumes:
+      - ./observability/alloy/config.compose.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
     restart: unless-stopped

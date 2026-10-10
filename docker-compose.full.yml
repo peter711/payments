@@ -12,6 +12,7 @@
 #   - payment-api : http://localhost:18080
 #   - Prometheus : http://localhost:19090
 #   - Grafana : http://localhost:13000  (anonymous admin; admin login from .env)
+#   - Loki : http://localhost:13100  (Grafana "Loki" datasource; logs via Alloy)
 #   - Kafka (host listener) : localhost:29092
 #
 # Service-to-service traffic uses the INTERNAL listener (kafka:19092); the HOST
@@ -99,6 +100,33 @@ services:
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
+      - loki
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.5.4
+    ports:
+      - "13100:3100"
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+    restart: unless-stopped
+
+  # Tails the application container logs (ECS JSON) and forwards them to Loki.
+  alloy:
+    image: grafana/alloy:v1.20.1
+    ports:
+      - "12345:12345"
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+    volumes:
+      - ./observability/alloy/config.compose.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
     restart: unless-stopped
 
   payment-api:
@@ -111,6 +139,8 @@ services:
       - "18080:8080"
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      # ECS JSON logs, collected by the Alloy service and stored in Loki.
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
     depends_on:
       kafka-init:
         condition: service_completed_successfully
@@ -124,6 +154,8 @@ services:
         MODULE: payment-processor
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      # ECS JSON logs, collected by the Alloy service and stored in Loki.
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
     volumes:
       - payment-processor-data:/app/data
     depends_on:
@@ -139,6 +171,8 @@ services:
         MODULE: notification-service
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      # ECS JSON logs, collected by the Alloy service and stored in Loki.
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
     volumes:
       - notification-service-data:/app/data
     depends_on:
